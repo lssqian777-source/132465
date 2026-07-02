@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>产品多视角生成器 Pro</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg0:#07070f;--bg1:#0d0d1e;--bg2:#12122a;--bg3:#181835;--bg4:#1e1e40;
+  --ac1:#7B68EE;--ac2:#4A74F3;--ac3:#B55CE6;--acO:#FF6B35;
+  --glow:rgba(123,104,238,.2);
+  --t1:#f0f0ff;--t2:#9090b8;--t3:#50506a;
+  --ok:#4ade80;--er:#f87171;--warn:#fbbf24;
+  --bdr:rgba(255,255,255,.07);
+  --c-up:#4A74F3;--c-f:#7B68EE;--c-dn:#B55CE6;
+  --sb:270px;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg0);color:var(--t1);display:flex;flex-direction:column}
+.topbar{height:52px;background:rgba(7,7,15,.95);border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0;z-index:200;backdrop-filter:blur(20px)}
+.tb-logo{display:flex;align-items:center;gap:10px}
+.tb-ico{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--ac1),var(--ac2));display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 0 18px var(--glow)}
+.tb-name{font-size:15px;font-weight:800;background:linear-gradient(90deg,#fff 30%,var(--ac1));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.tb-sub{font-size:10px;color:var(--t3);letter-spacing:1.5px;text-transform:uppercase}
+.tb-right{display:flex;align-items:center;gap:10px}
+.tb-badge{background:rgba(123,104,238,.12);border:1px solid rgba(123,104,238,.28);color:var(--ac1);padding:3px 12px;border-radius:16px;font-size:11px;font-weight:700}
+.btn-admin{background:rgba(255,107,53,.12);border:1.5px solid rgba(255,107,53,.5);color:var(--acO);padding:5px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
+.btn-admin:hover{background:rgba(255,107,53,.2);box-shadow:0 0 16px rgba(255,107,53,.3)}
+.layout{display:flex;flex:1;overflow:hidden}
+.sidebar{width:var(--sb);flex-shrink:0;background:var(--bg1);border-right:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden}
+.sb-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 10px}
+.sb-scroll::-webkit-scrollbar{width:3px}
+.sb-scroll::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
+.sb-footer{padding:10px;border-top:1px solid var(--bdr);flex-shrink:0}
+.sec{margin-bottom:12px}
+.sec-hdr{display:flex;align-items:center;gap:7px;padding:7px 8px;border-radius:7px;background:var(--bg2);border:1px solid var(--bdr);margin-bottom:8px}
+.sec-ico{font-size:13px}
+.sec-tit{font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.4px}
+.prov-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}
+.prov-tab{padding:7px 4px;border-radius:7px;border:1.5px solid var(--bdr);background:var(--bg2);text-align:center;cursor:pointer;transition:all .2s;user-select:none}
+.prov-tab:hover{border-color:rgba(123,104,238,.4);background:var(--bg3)}
+.prov-tab.active{border-color:var(--ac1);background:rgba(123,104,238,.12)}
+.prov-tab .pt-name{font-size:11px;font-weight:700;color:var(--t1);display:block;margin-bottom:1px}
+.prov-tab .pt-sub{font-size:9px;color:var(--t3);display:block}
+.prov-tab.active .pt-name{color:var(--ac1)}
+.lbl{font-size:10px;color:var(--t3);margin-bottom:4px;display:block;letter-spacing:.3px}
+.inp{width:100%;background:var(--bg0);border:1px solid var(--bdr);border-radius:6px;padding:8px 10px;color:var(--t1);font-size:12px;outline:none;transition:all .25s}
+.inp:focus{border-color:var(--ac1);box-shadow:0 0 0 2px var(--glow)}
+.inp-wrap{position:relative;margin-bottom:7px}
+.inp-eye{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--t3);cursor:pointer;font-size:12px;padding:2px}
+.sel-inp{width:100%;background:var(--bg0);border:1px solid var(--bdr);border-radius:6px;padding:7px 10px;color:var(--t1);font-size:12px;outline:none;cursor:pointer;margin-bottom:7px;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23505070'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;padding-right:26px}
+.btn-save{width:100%;padding:8px;border-radius:7px;border:none;background:linear-gradient(135deg,var(--ac1),var(--ac2));color:#fff;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;margin-bottom:7px}
+.btn-save:hover{opacity:.88;transform:translateY(-1px)}
+.info-mini{padding:8px 9px;background:rgba(74,116,243,.06);border:1px solid rgba(74,116,243,.15);border-radius:6px;font-size:10px;color:var(--t3);line-height:1.8}
+.info-mini strong{color:var(--t2)}
+
+/* 豆包端点ID提示框 */
+.doubao-tip{display:none;padding:8px 9px;background:rgba(255,107,53,.07);border:1px solid rgba(255,107,53,.25);border-radius:6px;font-size:10px;color:rgba(255,150,100,.9);line-height:1.8;margin-bottom:7px}
+.doubao-tip.on{display:block}
+.doubao-tip strong{color:var(--acO)}
+
+.prod-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+.prod-preview{padding:6px 8px;background:var(--bg0);border:1px solid var(--bdr);border-radius:6px;font-size:10px;color:var(--t3);margin-bottom:7px;line-height:1.6}
+.prod-preview strong{color:var(--ac1)}
+.dropzone{border:1.5px dashed rgba(123,104,238,.3);border-radius:9px;background:rgba(123,104,238,.04);padding:18px 10px;text-align:center;cursor:pointer;transition:all .25s;position:relative}
+.dropzone:hover,.dropzone.drag{border-color:var(--ac1);background:rgba(123,104,238,.08)}
+.dropzone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.dz-ico{font-size:24px;margin-bottom:6px;display:block}
+.dz-tit{font-size:12px;font-weight:600;margin-bottom:2px}
+.dz-hint{font-size:10px;color:var(--t3)}
+.prev-mini{display:none;margin-top:7px}
+.prev-mini.on{display:flex;align-items:center;gap:8px;padding:7px;background:var(--bg0);border-radius:7px;border:1px solid var(--bdr)}
+.prev-mini img{width:38px;height:38px;object-fit:contain;border-radius:4px;background:#000;flex-shrink:0}
+.prev-mini-name{font-size:10px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.prev-mini-sz{font-size:9px;color:var(--t3);margin-top:1px}
+.btn-change-mini{background:none;border:1px solid var(--bdr);color:var(--t3);padding:2px 7px;border-radius:4px;font-size:9px;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.btn-change-mini:hover{color:var(--t1);border-color:var(--ac1)}
+.angle-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.angle-cnt{font-size:10px;color:var(--t2)}
+.angle-cnt strong{color:var(--ac1)}
+.angle-mini-acts{display:flex;gap:4px}
+.btn-mini{background:none;border:1px solid var(--bdr);color:var(--t3);padding:2px 7px;border-radius:4px;font-size:10px;cursor:pointer;transition:all .2s}
+.btn-mini:hover{color:var(--t1);border-color:var(--ac1)}
+.row-label{display:flex;align-items:center;gap:5px;margin-bottom:4px;margin-top:2px}
+.row-dot{width:6px;height:6px;border-radius:50%}
+.row-name{font-size:9px;font-weight:700;letter-spacing:.5px}
+.ag{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:4px}
+.acard{background:var(--bg2);border:1.5px solid var(--bdr);border-radius:6px;padding:6px 3px;cursor:pointer;transition:all .2s;text-align:center;position:relative;user-select:none}
+.acard:hover{border-color:rgba(123,104,238,.4);background:var(--bg3)}
+.acard.sel{background:rgba(123,104,238,.08)}
+.acard.sel[data-row="0"]{border-color:var(--c-up)}
+.acard.sel[data-row="1"]{border-color:var(--c-f)}
+.acard.sel[data-row="2"]{border-color:var(--c-dn)}
+.acard.sel::after{content:'✓';position:absolute;top:2px;right:3px;width:12px;height:12px;border-radius:50%;font-size:8px;display:flex;align-items:center;justify-content:center;line-height:12px;color:#fff}
+.acard.sel[data-row="0"]::after{background:var(--c-up)}
+.acard.sel[data-row="1"]::after{background:var(--c-f)}
+.acard.sel[data-row="2"]::after{background:var(--c-dn)}
+.ac-svg-mini{display:block;margin:0 auto 3px}
+.ac-nm{font-size:9px;font-weight:700;color:var(--t1);line-height:1.2}
+.ac-code{font-size:8px;font-weight:800;margin-top:1px;letter-spacing:.3px}
+.acard[data-row="0"] .ac-code{color:var(--c-up)}
+.acard[data-row="1"] .ac-code{color:var(--c-f)}
+.acard[data-row="2"] .ac-code{color:var(--c-dn)}
+.param-row{margin-bottom:8px}
+.param-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.param-lbl{font-size:10px;color:var(--t3)}
+.param-val{font-size:10px;color:var(--ac1);font-weight:700}
+.slider{width:100%;accent-color:var(--ac1);cursor:pointer}
+.param-hint{font-size:9px;color:var(--t3);margin-top:2px}
+.btn-gen{width:100%;padding:12px;border-radius:9px;border:none;background:linear-gradient(135deg,var(--ac1),var(--ac2));color:#fff;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 0 24px var(--glow);transition:all .25s;letter-spacing:.3px;position:relative;overflow:hidden}
+.btn-gen::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);transition:left .5s}
+.btn-gen:hover::before{left:100%}
+.btn-gen:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(123,104,238,.5)}
+.btn-gen:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.gen-hint{font-size:9px;color:var(--t3);text-align:center;margin-top:5px}
+.content{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg0)}
+.content-hdr{padding:0 18px;height:46px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bdr);background:rgba(7,7,15,.6);position:relative}
+.content-tit{font-size:13px;font-weight:700;color:var(--t2)}
+.content-tit span{color:var(--t3);font-weight:400}
+.content-acts{display:flex;gap:7px}
+.btn-clear{background:none;border:1px solid var(--bdr);color:var(--t3);padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;transition:all .2s}
+.btn-clear:hover{color:var(--t1);border-color:var(--er)}
+.btn-dall{display:flex;align-items:center;gap:5px;background:linear-gradient(135deg,var(--ac1),var(--ac2));border:none;color:#fff;padding:5px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-dall:hover{transform:translateY(-1px)}
+.prog-bar-wrap{height:2px;background:var(--bg3);position:absolute;bottom:0;left:0;right:0}
+.prog-bar{height:100%;background:linear-gradient(to right,var(--c-up),var(--c-f),var(--c-dn));transition:width .3s;width:0}
+.content-body{flex:1;overflow-y:auto;padding:14px}
+.content-body::-webkit-scrollbar{width:5px}
+.content-body::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+.empty-state{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--t3)}
+.empty-ico{font-size:44px;opacity:.25}
+.empty-tit{font-size:13px;font-weight:600;opacity:.45}
+.empty-hint{font-size:11px;opacity:.3;text-align:center;line-height:1.8}
+.rgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:1100px){.rgrid{grid-template-columns:repeat(2,1fr)}}
+.rcard{background:var(--bg2);border:1px solid var(--bdr);border-radius:12px;overflow:hidden;transition:all .3s;animation:fadeUp .35s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.rcard:hover{transform:translateY(-3px);box-shadow:0 10px 32px rgba(0,0,0,.5)}
+.rcard[data-row="0"]:hover{border-color:rgba(74,116,243,.4)}
+.rcard[data-row="1"]:hover{border-color:rgba(123,104,238,.4)}
+.rcard[data-row="2"]:hover{border-color:rgba(181,92,230,.4)}
+.rimg{width:100%;aspect-ratio:1;background:#000;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center}
+.rimg img{max-width:100%;max-height:100%;object-fit:contain}
+.rovr{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s}
+.rimg:hover .rovr{opacity:1}
+.btn-dl-ovr{background:#fff;color:#000;border:none;padding:7px 18px;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer}
+.rftr{padding:10px 12px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--bdr)}
+.r-names{flex:1}
+.r-name{font-size:11px;font-weight:700}
+.r-file{font-size:9px;color:var(--t3);margin-top:1px;font-family:'Courier New',monospace}
+.btn-dl-sm{background:rgba(123,104,238,.12);border:1px solid rgba(123,104,238,.22);color:var(--ac1);padding:4px 10px;border-radius:5px;font-size:10px;cursor:pointer;transition:all .2s;font-weight:700;white-space:nowrap}
+.btn-dl-sm:hover{background:rgba(123,104,238,.22)}
+.status-bar{height:22px;background:var(--bg1);border-top:1px solid var(--bdr);display:flex;align-items:center;padding:0 14px;gap:14px;flex-shrink:0}
+.sb-item{font-size:9px;color:var(--t3);display:flex;align-items:center;gap:4px}
+.sb-dot{width:5px;height:5px;border-radius:50%;background:var(--t3)}
+.sb-dot.ok{background:var(--ok)}
+.sb-dot.warn{background:var(--warn);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── ADMIN MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:none;align-items:flex-start;justify-content:flex-end;backdrop-filter:blur(4px)}
+.modal-overlay.on{display:flex}
+.admin-panel{width:600px;height:100%;background:var(--bg1);border-left:1px solid var(--bdr);display:flex;flex-direction:column;animation:slideIn .25s ease;overflow:hidden}
+@keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+.ap-hdr{padding:14px 18px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.ap-tit{font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px}
+.btn-close{background:none;border:1px solid var(--bdr);color:var(--t3);width:26px;height:26px;border-radius:5px;cursor:pointer;font-size:13px;transition:all .2s}
+.btn-close:hover{color:var(--t1);border-color:var(--er)}
+.ap-body{flex:1;overflow-y:auto;padding:14px 18px}
+.ap-body::-webkit-scrollbar{width:4px}
+.ap-body::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
+.ap-sec{margin-bottom:18px}
+.ap-sec-tit{font-size:10px;font-weight:700;color:var(--t3);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--bdr)}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.stat-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:7px;padding:10px;text-align:center}
+.stat-val{font-size:20px;font-weight:800;color:var(--ac1)}
+.stat-lbl{font-size:9px;color:var(--t3);margin-top:2px}
+
+/* ── DIAGNOSTIC STYLES ── */
+.diag-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.diag-intro{font-size:11px;color:var(--t3);line-height:1.7;padding:8px 10px;background:rgba(74,116,243,.06);border:1px solid rgba(74,116,243,.15);border-radius:7px;margin-bottom:10px}
+.diag-intro strong{color:var(--t2)}
+.btn-diag{display:flex;align-items:center;gap:6px;padding:7px 16px;background:linear-gradient(135deg,rgba(255,107,53,.15),rgba(255,107,53,.08));border:1.5px solid rgba(255,107,53,.4);color:var(--acO);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-diag:hover{background:rgba(255,107,53,.2);box-shadow:0 0 14px rgba(255,107,53,.3)}
+.btn-diag:disabled{opacity:.4;cursor:not-allowed}
+.diag-steps{display:flex;flex-direction:column;gap:6px}
+.diag-step{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;transition:all .3s}
+.diag-step[data-status="running"]{border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.05)}
+.diag-step[data-status="ok"]{border-color:rgba(74,222,128,.3);background:rgba(74,222,128,.05)}
+.diag-step[data-status="warn"]{border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.05)}
+.diag-step[data-status="fail"]{border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.05)}
+.ds-row{display:flex;align-items:center;gap:8px}
+.ds-ico{font-size:14px;flex-shrink:0;width:20px;text-align:center}
+.ds-label{font-size:11px;font-weight:700;color:var(--t2);flex-shrink:0;min-width:120px}
+.ds-msg{font-size:11px;color:var(--t3);flex:1}
+.diag-step[data-status="ok"] .ds-msg{color:var(--ok)}
+.diag-step[data-status="warn"] .ds-msg{color:var(--warn)}
+.diag-step[data-status="fail"] .ds-msg{color:var(--er)}
+.ds-detail{font-size:10px;color:var(--t3);margin-top:6px;padding:6px 8px;background:rgba(0,0,0,.3);border-radius:5px;font-family:'Courier New',monospace;line-height:1.7;display:none;white-space:pre-wrap;word-break:break-all}
+.diag-step[data-status="fail"] .ds-detail{color:rgba(248,113,113,.8)}
+.diag-step[data-status="warn"] .ds-detail{color:rgba(251,191,36,.8)}
+.diag-step[data-status="ok"] .ds-detail{color:rgba(74,222,128,.8)}
+.ds-spin{display:inline-block;animation:spin .7s linear infinite;font-style:normal}
+@keyframes spin{to{transform:rotate(360deg)}}
+.diag-conclusion{margin-top:10px;padding:10px 12px;border-radius:8px;font-size:11px;line-height:1.7;display:none}
+.diag-conclusion.on{display:block}
+.diag-conclusion.ok{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);color:var(--ok)}
+.diag-conclusion.fail{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.25);color:var(--er)}
+.diag-conclusion.warn{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);color:var(--warn)}
+
+/* Prompt editor */
+.prompt-layout{display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:start}
+.angle-map{display:flex;flex-direction:column;gap:3px}
+.row-grp{display:flex;flex-direction:column;gap:3px;margin-bottom:2px}
+.row-grp-lbl{font-size:8px;font-weight:700;padding:2px 5px;border-radius:3px;text-align:center;letter-spacing:.5px;margin-bottom:2px}
+.map-row{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+.map-cell{border-radius:5px;padding:5px 2px;text-align:center;cursor:pointer;transition:all .2s;border:1.5px solid transparent;user-select:none}
+.map-cell:hover{opacity:.8}
+.map-cell.active-cell{border-color:#fff!important;box-shadow:0 0 8px rgba(255,255,255,.2)}
+.map-cell .mc-code{font-size:8px;font-weight:800;display:block;color:#fff}
+.map-cell .mc-name{font-size:7px;color:rgba(255,255,255,.7);display:block;margin-top:1px}
+.prompt-editor-panel{background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;padding:12px;min-height:300px}
+.ped-hdr{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ped-badge{padding:3px 9px;border-radius:5px;font-size:10px;font-weight:800;color:#fff}
+.ped-name{font-size:13px;font-weight:700}
+.ped-en{font-size:10px;color:var(--t3);margin-left:auto}
+.ped-lbl{font-size:10px;color:var(--t3);margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.ped-lbl span{font-weight:700;color:var(--t2)}
+.prompt-ta{width:100%;background:var(--bg0);border:1px solid var(--bdr);border-radius:6px;padding:8px 10px;color:var(--t1);font-size:11px;font-family:'Courier New',monospace;resize:vertical;min-height:65px;outline:none;transition:border-color .2s;line-height:1.6;margin-bottom:8px}
+.prompt-ta:focus{border-color:var(--ac1)}
+.ped-acts{display:flex;gap:6px;margin-top:8px}
+.btn-ped-save{flex:1;padding:7px;border-radius:6px;border:none;background:linear-gradient(135deg,var(--ac1),var(--ac2));color:#fff;font-size:11px;font-weight:700;cursor:pointer}
+.btn-ped-reset{padding:7px 12px;border-radius:6px;border:1px solid var(--bdr);background:none;color:var(--t3);font-size:11px;cursor:pointer;transition:all .2s}
+.btn-ped-reset:hover{color:var(--t1);border-color:var(--warn)}
+.kw-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.kw-tag{padding:2px 7px;background:var(--bg3);border:1px solid var(--bdr);border-radius:4px;font-size:9px;color:var(--t2);cursor:pointer;transition:all .2s}
+.kw-tag:hover{border-color:var(--ac1);color:var(--ac1)}
+.naming-preview{background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;margin-top:8px}
+.naming-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.naming-lbl{font-size:10px;color:var(--t3);width:40px;flex-shrink:0}
+.naming-badge{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Courier New',monospace}
+.naming-desc{font-size:9px;color:var(--t3);margin-top:6px;line-height:1.6}
+.naming-eg{font-size:9px;color:var(--t2);margin-top:3px}
+.ex-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn-ap-save{width:100%;padding:8px;border-radius:6px;border:none;background:linear-gradient(135deg,var(--ac1),var(--ac2));color:#fff;font-size:11px;font-weight:700;cursor:pointer;margin-top:8px}
+
+/* TOAST */
+.toasts{position:fixed;bottom:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:5px}
+.toast{background:var(--bg3);border:1px solid var(--bdr);padding:8px 14px;border-radius:8px;font-size:11px;box-shadow:0 4px 18px rgba(0,0,0,.5);display:flex;align-items:center;gap:7px;animation:tin .22s ease;max-width:280px}
+@keyframes tin{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+.toast.ok{border-color:rgba(74,222,128,.3)}
+.toast.er{border-color:rgba(248,113,113,.3)}
+.toast.warn{border-color:rgba(251,191,36,.3)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-logo">
+    <div class="tb-ico">🎯</div>
+    <div>
+      <div class="tb-name">产品多视角生成器 Pro</div>
+      <div class="tb-sub">Designer Edition · AI Powered</div>
+    </div>
+  </div>
+  <div class="tb-right">
+    <div class="tb-badge" id="provBadge">✦ Stability AI</div>
+    <button class="btn-admin" onclick="openAdmin()">⚙ 后台管理</button>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sb-scroll">
+
+      <!-- § 引擎配置 -->
+      <div class="sec">
+        <div class="sec-hdr"><span class="sec-ico">🔌</span><span class="sec-tit">引擎 &amp; API 配置</span></div>
+        <div class="prov-tabs" id="provTabs">
+          <div class="prov-tab active" data-prov="stability" onclick="switchProv(this)"><span class="pt-name">Stability</span><span class="pt-sub">img2img</span></div>
+          <div class="prov-tab" data-prov="doubao" onclick="switchProv(this)"><span class="pt-name">豆包</span><span class="pt-sub">Doubao Ark</span></div>
+          <div class="prov-tab" data-prov="kling" onclick="switchProv(this)"><span class="pt-name">可灵</span><span class="pt-sub">Kling AI</span></div>
+          <div class="prov-tab" data-prov="jimeng" onclick="switchProv(this)"><span class="pt-name">即梦</span><span class="pt-sub">Jimeng AI</span></div>
+        </div>
+
+        <label class="lbl">API Key</label>
+        <div class="inp-wrap">
+          <input type="password" class="inp" id="apiIn" placeholder="sk-xxxxxxxxxxxx" autocomplete="off">
+          <button class="inp-eye" onclick="toggleKey()">👁</button>
+        </div>
+
+        <!-- 豆包端点ID（仅豆包显示） -->
+        <div class="doubao-tip" id="doubaoTip">
+          ⚡ <strong>豆包需填写端点 ID</strong><br>
+          格式：ep-20260702121210-d8qrj<br>
+          获取：火山引擎控制台 → 方舟 → 我的端点
+        </div>
+        <div id="doubaoEpWrap" style="display:none">
+          <label class="lbl">端点 ID (ep-xxxxx)</label>
+          <input type="text" class="inp" id="doubaoEp" placeholder="ep-20260702121210-d8qrj" style="margin-bottom:7px;font-family:'Courier New',monospace;font-size:11px">
+        </div>
+
+        <label class="lbl" id="modelLbl">模型引擎</label>
+        <select class="sel-inp" id="modelSel"></select>
+        <button class="btn-save" onclick="saveCfg()">保存配置</button>
+        <div class="info-mini" id="provInfo">💡 <strong>Stability AI</strong>：platform.stability.ai → API Keys</div>
+      </div>
+
+      <!-- § 产品信息 -->
+      <div class="sec">
+        <div class="sec-hdr"><span class="sec-ico">🏷</span><span class="sec-tit">产品信息（下载命名）</span></div>
+        <div class="prod-row">
+          <div><label class="lbl">品名</label><input type="text" class="inp" id="prodName" placeholder="红管经典" oninput="updNaming()"></div>
+          <div><label class="lbl">色号</label><input type="text" class="inp" id="prodColor" placeholder="405" oninput="updNaming()"></div>
+        </div>
+        <div class="prod-preview" id="prodPreview">命名预览：<strong>—</strong><br><span style="font-size:9px;opacity:.6">格式：品名 + 色号 + 视角</span></div>
+      </div>
+
+      <!-- § 上传图片 -->
+      <div class="sec">
+        <div class="sec-hdr"><span class="sec-ico">🖼</span><span class="sec-tit">上传产品图片</span></div>
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="fileIn" accept="image/png,image/jpeg,image/jpg,image/webp">
+          <span class="dz-ico">📁</span>
+          <div class="dz-tit">拖拽或点击上传</div>
+          <div class="dz-hint">PNG · JPG · WEBP · 建议白底高清</div>
+        </div>
+        <div class="prev-mini" id="prevMini">
+          <img id="prevThumb" src="" alt="">
+          <div style="flex:1;min-width:0">
+            <div class="prev-mini-name" id="prevName">—</div>
+            <div class="prev-mini-sz" id="prevSz">—</div>
+          </div>
+          <button class="btn-change-mini" onclick="document.getElementById('fileIn').click()">更换</button>
+        </div>
+      </div>
+
+      <!-- § 视角矩阵 -->
+      <div class="sec">
+        <div class="sec-hdr"><span class="sec-ico">🎨</span><span class="sec-tit">选择视角（设计师矩阵）</span></div>
+        <div class="angle-bar">
+          <div class="angle-cnt">已选 <strong id="selCnt">9</strong>/9</div>
+          <div class="angle-mini-acts">
+            <button class="btn-mini" onclick="selAll()">全选</button>
+            <button class="btn-mini" onclick="deselAll()">取消</button>
+          </div>
+        </div>
+        <div class="row-label"><div class="row-dot" style="background:var(--c-up)"></div><span class="row-name" style="color:var(--c-up)">仰视组 · UP GROUP</span></div>
+        <div class="ag" id="ag-row0"></div>
+        <div class="row-label" style="margin-top:6px"><div class="row-dot" style="background:var(--c-f)"></div><span class="row-name" style="color:var(--c-f)">正视组 · FRONT GROUP</span></div>
+        <div class="ag" id="ag-row1"></div>
+        <div class="row-label" style="margin-top:6px"><div class="row-dot" style="background:var(--c-dn)"></div><span class="row-name" style="color:var(--c-dn)">俯视组 · DOWN GROUP</span></div>
+        <div class="ag" id="ag-row2"></div>
+      </div>
+
+      <!-- § 生成参数 -->
+      <div class="sec">
+        <div class="sec-hdr"><span class="sec-ico">⚙</span><span class="sec-tit">生成参数</span></div>
+        <div class="param-row">
+          <div class="param-hdr"><span class="param-lbl">图像强度</span><span class="param-val" id="strVal">34%</span></div>
+          <input type="range" class="slider" id="strSlider" min="10" max="70" value="34" oninput="document.getElementById('strVal').textContent=this.value+'%'">
+          <div class="param-hint">低 = 贴近原图 · 高 = AI 自由发挥</div>
+        </div>
+        <div class="param-row">
+          <div class="param-hdr"><span class="param-lbl">采样步数</span><span class="param-val" id="stepsVal">35</span></div>
+          <input type="range" class="slider" id="stepsSlider" min="20" max="60" value="35" oninput="document.getElementById('stepsVal').textContent=this.value">
+          <div class="param-hint">步数越高质量越好，耗时也越长</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="sb-footer">
+      <button class="btn-gen" id="genBtn" onclick="generate()">✦ 开始生成</button>
+      <div class="gen-hint">每视角约 15-90 秒 · 顺序生成可实时查看结果</div>
+    </div>
+  </aside>
+
+  <div class="content">
+    <div class="content-hdr">
+      <div class="content-tit">生成结果矩阵 <span id="statusLabel">— 待生成</span></div>
+      <div class="content-acts">
+        <button class="btn-clear" onclick="clearResults()">清空</button>
+        <button class="btn-dall" onclick="dlAll()">⬇ 全部下载</button>
+      </div>
+      <div class="prog-bar-wrap"><div class="prog-bar" id="progBar"></div></div>
+    </div>
+    <div class="content-body" id="contentBody">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-ico">🎯</div>
+        <div class="empty-tit">等待生成</div>
+        <div class="empty-hint">配置 API Key → 填写品名色号 → 上传产品图<br>选择所需视角 → 点击「开始生成」</div>
+      </div>
+      <div class="rgrid" id="rgrid" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="sb-item"><div class="sb-dot" id="connDot"></div><span id="connLabel">未连接</span></div>
+  <div class="sb-item">已生成: <strong id="totalGen" style="color:var(--ac1)">0</strong> 张</div>
+  <div class="sb-item">引擎: <strong id="engineLabel" style="color:var(--ac1)">—</strong></div>
+  <div class="sb-item" style="margin-left:auto;font-size:9px">v3.1 Pro · 设计师专业版</div>
+</div>
+
+<!-- ══ ADMIN PANEL ══ -->
+<div class="modal-overlay" id="adminOverlay" onclick="closeAdminBg(event)">
+  <div class="admin-panel">
+    <div class="ap-hdr">
+      <div class="ap-tit">⚙ 后台管理</div>
+      <button class="btn-close" onclick="closeAdmin()">✕</button>
+    </div>
+    <div class="ap-body">
+
+      <!-- 统计 -->
+      <div class="ap-sec">
+        <div class="ap-sec-tit">📊 会话统计</div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-val" id="st-gen">0</div><div class="stat-lbl">已生成</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-sel">9</div><div class="stat-lbl">已选视角</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-dl">0</div><div class="stat-lbl">已下载</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-err">0</div><div class="stat-lbl">失败次数</div></div>
+        </div>
+      </div>
+
+      <!-- ★ 诊断工具（新增核心功能） -->
+      <div class="ap-sec">
+        <div class="ap-sec-tit">🔬 API 诊断工具</div>
+        <div class="diag-intro">
+          <strong>用途：</strong>逐步检测「程序读取图片」和「引擎识别图片」两个环节，精准定位故障位置<br>
+          <strong>使用前：</strong>请先在左侧配置 API Key、上传图片，然后切换到要测试的引擎
+        </div>
+        <div class="diag-header">
+          <span style="font-size:11px;color:var(--t3)">当前引擎：<strong id="diagProvLabel" style="color:var(--ac1)">Stability AI</strong></span>
+          <button class="btn-diag" id="diagBtn" onclick="runDiagnostic()">▶ 运行诊断</button>
+        </div>
+        <div class="diag-steps" id="diagSteps">
+          <!-- 初始占位 -->
+          <div style="text-align:center;padding:20px;color:var(--t3);font-size:12px;background:var(--bg2);border-radius:8px;border:1px solid var(--bdr)">
+            点击「运行诊断」开始检测
+          </div>
+        </div>
+        <div class="diag-conclusion" id="diagConclusion"></div>
+      </div>
+
+      <!-- 命名规则 -->
+      <div class="ap-sec">
+        <div class="ap-sec-tit">🏷 文件命名规则</div>
+        <div class="naming-preview">
+          <div class="naming-row">
+            <span class="naming-lbl">规则</span>
+            <span class="naming-badge" style="background:rgba(123,104,238,.2);color:var(--ac1)">品名</span>
+            <span style="color:var(--t3);font-size:12px">+</span>
+            <span class="naming-badge" style="background:rgba(74,116,243,.2);color:var(--ac2)">色号</span>
+            <span style="color:var(--t3);font-size:12px">+</span>
+            <span class="naming-badge" style="background:rgba(181,92,230,.2);color:var(--ac3)">视角名</span>
+            <span class="naming-badge" style="background:rgba(255,255,255,.06);color:var(--t3)">.png</span>
+          </div>
+          <div class="naming-desc">文件名自动由「品名 + 色号 + 视角中文名」拼接</div>
+          <div class="naming-eg" id="namingEg">示例：红管经典405正视.png · 红管经典405左俯视.png</div>
+        </div>
+      </div>
+
+      <!-- 视角提示词管理 -->
+      <div class="ap-sec">
+        <div class="ap-sec-tit">🎯 9视角提示词独立管理</div>
+        <div class="prompt-layout">
+          <div class="angle-map" id="angleMap"></div>
+          <div class="prompt-editor-panel" id="promptEditorPanel">
+            <div style="text-align:center;padding:40px 0;color:var(--t3);font-size:12px">
+              👆 点击左侧视角位置<br>进行提示词编辑
+            </div>
+          </div>
+        </div>
+        <button class="btn-ap-save" onclick="saveAllPrompts()">💾 保存所有提示词</button>
+      </div>
+
+      <!-- 导出设置 -->
+      <div class="ap-sec">
+        <div class="ap-sec-tit">💾 导出设置</div>
+        <div class="ex-grid">
+          <div>
+            <label class="lbl">图片格式</label>
+            <select class="sel-inp" id="fmtSel"><option value="png">PNG 无损（推荐）</option><option value="jpg90">JPG 90%</option></select>
+          </div>
+          <div>
+            <label class="lbl">批量下载间隔</label>
+            <select class="sel-inp" id="dlDelay"><option value="300">300ms（快速）</option><option value="500" selected>500ms（推荐）</option><option value="800">800ms（安全）</option></select>
+          </div>
+        </div>
+        <button class="btn-ap-save" onclick="toast('✓ 导出设置已保存','ok')">保存设置</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+// ══════════════════════════════════════════
+//  9视角数据
+// ══════════════════════════════════════════
+const ANGLES = [
+  {id:'l-up', name:'左仰视',shortName:'左仰视',en:'L-UP',row:0,col:0,rowColor:'#4A74F3',rowName:'仰视组',
+   prompt:'professional product photography, left-side low angle upward diagonal view, camera at lower-left tilted upward, white seamless background, studio lighting, photorealistic, 8k, commercial grade',
+   neg:'blurry,dark background,watermark,text,person'},
+  {id:'up',   name:'仰视',  shortName:'仰视',  en:'UP',  row:0,col:1,rowColor:'#4A74F3',rowName:'仰视组',
+   prompt:'professional product photography, front low angle upward view, camera below looking straight up, worm eye view, white seamless background, studio lighting, photorealistic, 8k',
+   neg:'blurry,dark background,watermark,text,person'},
+  {id:'r-up', name:'右仰视',shortName:'右仰视',en:'R-UP',row:0,col:2,rowColor:'#4A74F3',rowName:'仰视组',
+   prompt:'professional product photography, right-side low angle upward diagonal view, camera at lower-right tilted upward, white seamless background, studio lighting, photorealistic, 8k, commercial grade',
+   neg:'blurry,dark background,watermark,text,person'},
+  {id:'l',    name:'左侧',  shortName:'左侧',  en:'L',   row:1,col:0,rowColor:'#7B68EE',rowName:'正视组',
+   prompt:'professional product photography, left profile side view, 90 degrees from left, eye level, white seamless background, soft studio lighting, photorealistic, 8k',
+   neg:'blurry,dark background,watermark,text,person,front view'},
+  {id:'f',    name:'正视',  shortName:'正视',  en:'F',   row:1,col:1,rowColor:'#7B68EE',rowName:'正视组',
+   prompt:'professional product photography, front view eye-level, straight-on centered, white seamless background, soft even lighting, photorealistic, 8k, commercial grade',
+   neg:'blurry,dark background,watermark,text,person,angled,tilted'},
+  {id:'r',    name:'右侧',  shortName:'右侧',  en:'R',   row:1,col:2,rowColor:'#7B68EE',rowName:'正视组',
+   prompt:'professional product photography, right profile side view, 90 degrees from right, eye level, white seamless background, soft studio lighting, photorealistic, 8k',
+   neg:'blurry,dark background,watermark,text,person,front view'},
+  {id:'l-dn', name:'左俯视',shortName:'左俯视',en:'L-DN',row:2,col:0,rowColor:'#B55CE6',rowName:'俯视组',
+   prompt:'professional product photography, left high angle downward diagonal view, camera at upper-left tilted down, white seamless background, studio lighting, photorealistic, 8k, commercial grade',
+   neg:'blurry,dark background,watermark,text,person'},
+  {id:'dn',   name:'俯视',  shortName:'俯视',  en:'DN',  row:2,col:1,rowColor:'#B55CE6',rowName:'俯视组',
+   prompt:'professional product photography, overhead top-down view, bird eye view, camera directly above, flat lay, white seamless background, even lighting, photorealistic, 8k',
+   neg:'blurry,dark background,watermark,text,person,tilted'},
+  {id:'r-dn', name:'右俯视',shortName:'右俯视',en:'R-DN',row:2,col:2,rowColor:'#B55CE6',rowName:'俯视组',
+   prompt:'professional product photography, right high angle downward diagonal view, camera at upper-right tilted down, white seamless background, studio lighting, photorealistic, 8k, commercial grade',
+   neg:'blurry,dark background,watermark,text,person'},
+];
+
+// ══════════════════════════════════════════
+//  引擎配置
+// ══════════════════════════════════════════
+const PROVS = {
+  stability:{
+    label:'Stability AI',ph:'sk-xxxxxxxxxxxx',
+    info:'💡 <strong>获取：</strong>platform.stability.ai → API Keys<br>✅ img2img 真实视角控制，推荐首选',
+    models:[{v:'stable-diffusion-xl-1024-v1-0',l:'SDXL 1.0（推荐）'},{v:'stable-diffusion-v1-6',l:'SD v1.6'}],
+    showEp:false,
+  },
+  doubao:{
+    label:'豆包 Ark',ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    info:'💡 <strong>获取 Key：</strong>console.volcengine.com → 方舟 → API Keys<br>⚠ 同时需要在上方填写端点 ID（ep-xxxxx）',
+    models:[{v:'custom',l:'使用上方端点 ID'}],
+    showEp:true,
+  },
+  kling:{
+    label:'可灵 AI',ph:'xxxx-xxxx-xxxx',
+    info:'💡 <strong>获取：</strong>klingai.com → 开放平台 → API Keys<br>🎨 快手旗下，图像质量出色',
+    models:[{v:'kling-v1-5',l:'可灵 v1.5（推荐）'},{v:'kling-v1',l:'可灵 v1.0'}],
+    showEp:false,
+  },
+  jimeng:{
+    label:'即梦 AI',ph:'xxxxxxxxxxxxxxxx',
+    info:'💡 <strong>获取：</strong>jimeng.jianying.com → 开放平台<br>🌟 字节跳动出品，创意表现力强',
+    models:[{v:'jimeng-3-0',l:'即梦 3.0（推荐）'},{v:'jimeng-2-1',l:'即梦 2.1'}],
+    showEp:false,
+  },
+};
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let curProv='stability';
+let selSet=new Set(ANGLES.map(a=>a.id));
+let uploadedFile=null;
+let results=[];
+let dlCount=0,errCount=0;
+let customPrompts={};
+let activeMapAngle=null;
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  buildAngleGrid();
+  buildAngleMap();
+  initDrop();
+  loadCfg();
+  updateProvUI('stability');
+  updSelCount();
+  updNaming();
+  loadCustomPrompts();
+});
+
+// ══════════════════════════════════════════
+//  PROVIDER SWITCH
+// ══════════════════════════════════════════
+function switchProv(el){
+  document.querySelectorAll('.prov-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  curProv=el.dataset.prov;
+  updateProvUI(curProv);
+  document.getElementById('apiIn').value=localStorage.getItem('key_'+curProv)||'';
+  if(curProv==='doubao'){
+    document.getElementById('doubaoEp').value=localStorage.getItem('doubao_ep')||'';
+  }
+  document.getElementById('diagProvLabel').textContent=PROVS[curProv].label;
+  toast(`已切换至 ${PROVS[curProv].label}`,'ok');
+}
+
+function updateProvUI(p){
+  const pv=PROVS[p];
+  // Model select
+  const sel=document.getElementById('modelSel');
+  sel.innerHTML=pv.models.map(m=>`<option value="${m.v}">${m.l}</option>`).join('');
+  const saved=localStorage.getItem('model_'+p);
+  if(saved)sel.value=saved;
+  // Info
+  document.getElementById('provInfo').innerHTML=pv.info;
+  document.getElementById('apiIn').placeholder=pv.ph;
+  document.getElementById('engineLabel').textContent=pv.label;
+  document.getElementById('provBadge').textContent='✦ '+pv.label;
+  // 豆包端点ID输入框
+  document.getElementById('doubaoTip').classList.toggle('on',p==='doubao');
+  document.getElementById('doubaoEpWrap').style.display=p==='doubao'?'block':'none';
+  document.getElementById('modelSel').style.display=p==='doubao'?'none':'block';
+  document.getElementById('modelLbl').style.display=p==='doubao'?'none':'block';
+}
+
+function saveCfg(){
+  const k=document.getElementById('apiIn').value.trim();
+  if(!k){toast('请输入 API Key','er');return}
+  localStorage.setItem('key_'+curProv,k);
+  if(curProv==='doubao'){
+    const ep=document.getElementById('doubaoEp').value.trim();
+    if(!ep){toast('豆包需要同时填写端点 ID','er');return}
+    localStorage.setItem('doubao_ep',ep);
+  } else {
+    localStorage.setItem('model_'+curProv,document.getElementById('modelSel').value);
+  }
+  document.getElementById('connDot').className='sb-dot ok';
+  document.getElementById('connLabel').textContent=PROVS[curProv].label+' 已连接';
+  toast('✓ 配置已保存','ok');
+}
+
+function loadCfg(){
+  const k=localStorage.getItem('key_'+curProv)||'';
+  document.getElementById('apiIn').value=k;
+  if(k){
+    document.getElementById('connDot').className='sb-dot ok';
+    document.getElementById('connLabel').textContent=PROVS[curProv].label+' 已连接';
+  }
+}
+
+function getKey(){return document.getElementById('apiIn').value.trim()||localStorage.getItem('key_'+curProv)||''}
+function getModel(){
+  if(curProv==='doubao') return document.getElementById('doubaoEp').value.trim()||localStorage.getItem('doubao_ep')||'';
+  return document.getElementById('modelSel').value;
+}
+function toggleKey(){const el=document.getElementById('apiIn');el.type=el.type==='password'?'text':'password'}
+
+// ══════════════════════════════════════════
+//  ANGLE GRID
+// ══════════════════════════════════════════
+function buildAngleGrid(){
+  [0,1,2].forEach(row=>{
+    const g=document.getElementById('ag-row'+row);
+    if(!g)return;
+    g.innerHTML='';
+    ANGLES.filter(a=>a.row===row).forEach(a=>{
+      const d=document.createElement('div');
+      d.className='acard sel';
+      d.dataset.id=a.id;
+      d.dataset.row=a.row;
+      d.onclick=()=>toggleAngle(a.id);
+      d.innerHTML=`
+        <svg class="ac-svg-mini" width="38" height="38" viewBox="0 0 60 60">${buildAngleSVG(a)}</svg>
+        <div class="ac-nm">${a.name}</div>
+        <div class="ac-code">${a.en}</div>`;
+      g.appendChild(d);
+    });
+  });
+}
+
+function buildAngleSVG(angle){
+  const pts=[[10,10],[30,10],[50,10],[10,30],[30,30],[50,30],[10,50],[30,50],[50,50]];
+  const ids={'l-up':0,'up':1,'r-up':2,'l':3,'f':4,'r':5,'l-dn':6,'dn':7,'r-dn':8};
+  const camIdx=ids[angle.id], prodIdx=4, col=angle.rowColor;
+  let svg='';
+  pts.forEach((p,i)=>{
+    if(i===camIdx){
+      svg+=`<circle cx="${p[0]}" cy="${p[1]}" r="6" fill="${col}" opacity=".9"/>`;
+      svg+=`<circle cx="${p[0]}" cy="${p[1]}" r="9.5" fill="none" stroke="${col}" stroke-width="1" opacity=".35"/>`;
+    } else if(i===prodIdx&&camIdx!==prodIdx){
+      svg+=`<rect x="${p[0]-5}" y="${p[1]-5}" width="10" height="10" rx="2" fill="rgba(255,255,255,.45)"/>`;
+    } else {
+      svg+=`<circle cx="${p[0]}" cy="${p[1]}" r="2.5" fill="rgba(255,255,255,.18)"/>`;
+    }
+  });
+  if(camIdx!==prodIdx){
+    const [cx,cy]=pts[camIdx],[px,py]=pts[prodIdx];
+    const dx=px-cx,dy=py-cy,len=Math.sqrt(dx*dx+dy*dy);
+    const ux=dx/len,uy=dy/len;
+    svg+=`<defs><marker id="ah-${angle.id}" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto"><polygon points="0,0 5,2.5 0,5" fill="${col}"/></marker></defs>`;
+    svg+=`<line x1="${(cx+ux*10).toFixed(1)}" y1="${(cy+uy*10).toFixed(1)}" x2="${(px-ux*7).toFixed(1)}" y2="${(py-uy*7).toFixed(1)}" stroke="${col}" stroke-width="1.8" marker-end="url(#ah-${angle.id})" opacity=".8"/>`;
+  }
+  return svg;
+}
+
+function toggleAngle(id){
+  selSet.has(id)?selSet.delete(id):selSet.add(id);
+  document.querySelector(`.acard[data-id="${id}"]`)?.classList.toggle('sel',selSet.has(id));
+  updSelCount();
+}
+function selAll(){ANGLES.forEach(a=>{selSet.add(a.id);document.querySelector(`.acard[data-id="${a.id}"]`)?.classList.add('sel')});updSelCount()}
+function deselAll(){selSet.clear();document.querySelectorAll('.acard').forEach(c=>c.classList.remove('sel'));updSelCount()}
+function updSelCount(){document.getElementById('selCnt').textContent=selSet.size;document.getElementById('st-sel').textContent=selSet.size}
+
+// ══════════════════════════════════════════
+//  PRODUCT NAMING
+// ══════════════════════════════════════════
+function updNaming(){
+  const nm=document.getElementById('prodName').value.trim();
+  const cl=document.getElementById('prodColor').value.trim();
+  const base=(nm||'品名')+(cl||'色号');
+  document.getElementById('prodPreview').innerHTML=`命名预览：<strong style="color:var(--ac1)">${base}正视.png</strong><br><span style="font-size:9px;opacity:.6">格式：品名 + 色号 + 视角</span>`;
+  const eg=document.getElementById('namingEg');
+  if(eg) eg.textContent=`示例：${base}正视.png · ${base}左俯视.png · ${base}仰视.png`;
+}
+
+function getFileName(angle){
+  const nm=document.getElementById('prodName').value.trim();
+  const cl=document.getElementById('prodColor').value.trim();
+  return (nm||'产品')+(cl||'')+(angle.shortName||angle.name);
+}
+
+// ══════════════════════════════════════════
+//  DROP ZONE
+// ══════════════════════════════════════════
+function initDrop(){
+  const dz=document.getElementById('dropzone');
+  const fi=document.getElementById('fileIn');
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag')});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+  dz.addEventListener('drop',e=>{
+    e.preventDefault();dz.classList.remove('drag');
+    const f=e.dataTransfer.files[0];
+    if(f&&f.type.startsWith('image/'))handleFile(f);
+    else toast('请上传图片文件','er');
+  });
+  fi.addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0])});
+}
+
+function handleFile(f){
+  uploadedFile=f;
+  const r=new FileReader();
+  r.onload=e=>{
+    const src=e.target.result;
+    document.getElementById('prevThumb').src=src;
+    document.getElementById('prevName').textContent=f.name;
+    const img=new Image();
+    img.onload=()=>{document.getElementById('prevSz').textContent=`${img.width}×${img.height} · ${(f.size/1024).toFixed(0)}KB`};
+    img.src=src;
+    document.getElementById('prevMini').classList.add('on');
+    toast('✓ 图片上传成功','ok');
+  };
+  r.readAsDataURL(f);
+}
+
+// ══════════════════════════════════════════
+//  IMAGE HELPERS
+// ══════════════════════════════════════════
+
+/** 文件转 base64 DataURL */
+function fileToB64DataUrl(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>resolve(e.target.result);
+    reader.onerror=()=>reject(new Error('文件读取失败'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** 文件转纯 base64 字符串（不含前缀） */
+async function fileToB64Pure(file){
+  const dataUrl=await fileToB64DataUrl(file);
+  return dataUrl.split(',')[1];
+}
+
+/** 压缩图片用于测试（返回 DataURL） */
+function compressForTest(file,maxSize=256){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      const scale=Math.min(maxSize/img.width,maxSize/img.height,1);
+      const w=Math.round(img.width*scale);
+      const h=Math.round(img.height*scale);
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(cv.toDataURL('image/jpeg',0.7));
+    };
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+/** Stability 图片预处理 */
+function prepareForStability(file){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      const model=getModel();
+      const maxDim=model.includes('xl')||model.includes('1024')?1024:512;
+      let {width:w,height:h}=img;
+      const ratio=Math.min(maxDim/w,maxDim/h,1);
+      w=Math.floor(w*ratio/64)*64||64;
+      h=Math.floor(h*ratio/64)*64||64;
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      cv.toBlob(b=>resolve(b),'image/png');
+    };
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+/** 从 URL 获取图片并转为 DataURL（跨域回退直接返回URL） */
+async function urlToDataUrl(url){
+  try{
+    const res=await fetch(url,{mode:'cors'});
+    if(!res.ok) return url;
+    const blob=await res.blob();
+    return new Promise(resolve=>{
+      const reader=new FileReader();
+      reader.onload=e=>resolve(e.target.result);
+      reader.readAsDataURL(blob);
+    });
+  }catch(e){
+    console.warn('CORS阻止获取图片URL，直接使用URL展示');
+    return url;
+  }
+}
+
+// ══════════════════════════════════════════
+//  API IMPLEMENTATIONS
+// ══════════════════════════════════════════
+
+/** Stability AI img2img */
+async function genStability(blob,prompt,neg,key,model,strength,steps){
+  const fd=new FormData();
+  fd.append('init_image',blob,'img.png');
+  fd.append('init_image_mode','IMAGE_STRENGTH');
+  fd.append('image_strength',strength);
+  fd.append('text_prompts[0][text]',prompt);
+  fd.append('text_prompts[0][weight]','1');
+  fd.append('text_prompts[1][text]',neg);
+  fd.append('text_prompts[1][weight]','-1');
+  fd.append('cfg_scale','7');
+  fd.append('samples','1');
+  fd.append('steps',steps);
+  fd.append('style_preset','photographic');
+
+  const res=await fetch(
+    `https://api.stability.ai/v1/generation/${model}/image-to-image`,
+    {method:'POST',headers:{Authorization:`Bearer ${key}`,Accept:'application/json'},body:fd,signal:AbortSignal.timeout(90000)}
+  );
+  if(!res.ok){
+    let m=`HTTP ${res.status}`;
+    try{const j=await res.json();m=j.message||j.errors?.join(',')||m}catch(e){}
+    throw new Error(m);
+  }
+  const data=await res.json();
+  if(!data.artifacts?.length) throw new Error('引擎未返回图片');
+  return `data:image/png;base64,${data.artifacts[0].base64}`;
+}
+
+/**
+ * 豆包 Ark API — 图生图
+ * 修复要点：
+ *   1. 使用 JSON body（非 FormData）
+ *   2. image 字段传 base64 DataURL
+ *   3. 模型使用端点 ID (ep-xxxxx)
+ *   4. 同时处理 url / b64_json 两种响应格式
+ */
+async function genDoubao(imageFile,prompt,neg,key,endpointId){
+  if(!endpointId) throw new Error('未填写豆包端点 ID，请在左侧配置（格式: ep-xxxxx）');
+
+  // 1. 读取图片为 base64 DataURL
+  const b64DataUrl=await fileToB64DataUrl(imageFile);
+
+  // 2. 构建请求 body（与 curl 示例一致）
+  const body={
+    model:endpointId,
+    prompt:prompt+(neg?`，避免：${neg}`:''),
+    image:b64DataUrl,           // ← 程序端传参：base64 DataURL
+    response_format:'b64_json', // 优先请求 base64 避免二次跨域
+    size:'1024x1024',
+    stream:false,
+    watermark:false,
+  };
+
+  const res=await fetch('https://ark.cn-beijing.volces.com/api/v3/images/generations',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},
+    body:JSON.stringify(body),
+    signal:AbortSignal.timeout(120000),
+  });
+
+  const data=await res.json().catch(()=>({}));
+
+  if(!res.ok){
+    throw new Error(parseDoubaoError(res.status,
+      data.error?.message||data.message||`HTTP ${res.status}`,
+      endpointId));
+  }
+
+  // 3. 处理两种响应格式
+  const item=data.data?.[0];
+  if(!item) throw new Error(`响应格式异常：${JSON.stringify(data).slice(0,100)}`);
+  if(item.b64_json) return `data:image/png;base64,${item.b64_json}`;
+  if(item.url)      return await urlToDataUrl(item.url);
+  throw new Error('响应中未找到图片数据');
+}
+
+/** 解析豆包错误为中文 */
+function parseDoubaoError(status,msg,epId){
+  if(status===401) return `API Key 无效或已过期，请在左侧重新配置`;
+  if(status===400){
+    if(/image/i.test(msg)||/图片/.test(msg))
+      return `❌ 引擎拒绝了参考图（${msg}）\n→ 可能不支持 base64 格式，需要后端提供公开图片 URL`;
+    if(/model|endpoint|ep-/i.test(msg)||/端点/.test(msg))
+      return `端点 ID 无效："${epId}"\n→ 请在火山控制台 → 方舟 → 我的端点中复制正确 ID`;
+    return `请求参数错误（${msg}）`;
+  }
+  if(status===403) return `权限不足，请确认 API Key 是否开通图像生成权限`;
+  if(status===429) return `请求频率超限，请稍后重试`;
+  if(status===500) return `豆包服务器内部错误，请稍后重试`;
+  return msg;
+}
+
+/** 其他引擎 Mock（Pollinations 演示） */
+async function genMock(a,prompt){
+  await new Promise(r=>setTimeout(r,1200));
+  const ep=encodeURIComponent(prompt.slice(0,180));
+  const url=`https://image.pollinations.ai/prompt/${ep}?width=512&height=512&nologo=true&seed=${Math.random()*9999|0}`;
+  const res=await fetch(url);
+  if(!res.ok) throw new Error('Provider 暂不可用，请切换至 Stability');
+  const b=await res.blob();
+  return new Promise(resolve=>{const fr=new FileReader();fr.onload=e=>resolve(e.target.result);fr.readAsDataURL(b)});
+}
+
+// ══════════════════════════════════════════
+//  MAIN GENERATE FLOW
+// ══════════════════════════════════════════
+async function generate(){
+  const key=getKey();
+  if(!key){toast('请先配置并保存 API Key','er');return}
+  if(!uploadedFile){toast('请先上传产品图片','er');return}
+  if(selSet.size===0){toast('请至少选择一个视角','er');return}
+
+  const toGen=ANGLES.filter(a=>selSet.has(a.id));
+  const strength=parseInt(document.getElementById('strSlider').value)/100;
+  const steps=parseInt(document.getElementById('stepsSlider').value);
+  const model=getModel();
+
+  document.getElementById('genBtn').disabled=true;
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('rgrid').style.display='grid';
+
+  // 预处理图片（仅 Stability 需要 blob）
+  let blob=null;
+  if(curProv==='stability'){
+    try{blob=await prepareForStability(uploadedFile)}
+    catch(e){toast('图片预处理失败','er');document.getElementById('genBtn').disabled=false;return}
+  }
+
+  let done=0;
+  for(const a of toGen){
+    document.getElementById('statusLabel').textContent=`— 生成中 ${done+1}/${toGen.length}（${a.name}）`;
+    const {prompt,neg}=getPrompt(a);
+    try{
+      let dataUrl;
+      if(curProv==='stability'){
+        dataUrl=await genStability(blob,prompt,neg,key,model,strength,steps);
+      } else if(curProv==='doubao'){
+        dataUrl=await genDoubao(uploadedFile,prompt,neg,key,model);
+      } else {
+        dataUrl=await genMock(a,prompt);
+      }
+      results.push({angle:a,dataUrl});
+      addCard(a,dataUrl,done);
+      document.getElementById('st-gen').textContent=results.length;
+      document.getElementById('totalGen').textContent=results.length;
+    }catch(e){
+      errCount++;
+      document.getElementById('st-err').textContent=errCount;
+      toast(`${a.name} 失败：${e.message.slice(0,60)}`,'er');
+      console.error(`[${a.name}]`,e);
+    }
+    done++;
+    document.getElementById('progBar').style.width=(done/toGen.length*100)+'%';
+  }
+
+  document.getElementById('genBtn').disabled=false;
+  document.getElementById('statusLabel').textContent=`— 完成 ${results.length} 张`;
+  toast(`✓ 生成完成！${results.length} 张`,'ok');
+  setTimeout(()=>{document.getElementById('progBar').style.width='0%'},2000);
+}
+
+// ══════════════════════════════════════════
+//  🔬 诊断工具（核心新增）
+// ══════════════════════════════════════════
+async function runDiagnostic(){
+  const btn=document.getElementById('diagBtn');
+  btn.disabled=true;
+  btn.textContent='⏳ 诊断中...';
+
+  const conclusion=document.getElementById('diagConclusion');
+  conclusion.className='diag-conclusion';
+
+  const STEPS=[
+    {id:'img',  label:'① 图片上传检测'},
+    {id:'b64',  label:'② Base64 转换检测'},
+    {id:'key',  label:'③ API Key 验证'},
+    {id:'net',  label:'④ 网络连通性检测'},
+    {id:'api',  label:'⑤ 引擎 API 调用检测'},
+  ];
+
+  // 渲染步骤 UI
+  document.getElementById('diagSteps').innerHTML=STEPS.map(s=>`
+    <div class="diag-step" id="diag-${s.id}" data-status="pending">
+      <div class="ds-row">
+        <span class="ds-ico">⏸</span>
+        <span class="ds-label">${s.label}</span>
+        <span class="ds-msg" style="color:var(--t3)">等待检测...</span>
+      </div>
+      <div class="ds-detail"></div>
+    </div>`).join('');
+
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+  // 更新步骤显示
+  function setStep(id,status,msg,detail=''){
+    const el=document.getElementById('diag-'+id);
+    if(!el)return;
+    el.dataset.status=status;
+    const icons={pending:'⏸',running:'<i class="ds-spin">⟳</i>',ok:'✅',warn:'⚠',fail:'❌'};
+    el.querySelector('.ds-ico').innerHTML=icons[status]||'⏸';
+    el.querySelector('.ds-msg').textContent=msg;
+    const det=el.querySelector('.ds-detail');
+    det.textContent=detail;
+    det.style.display=detail?'block':'none';
+  }
+
+  // ─ 步骤1：图片上传 ─
+  setStep('img','running','检测中...');
+  await sleep(250);
+  if(!uploadedFile){
+    setStep('img','fail','未检测到上传图片','请先在左侧侧边栏上传产品图片，再运行诊断');
+    showConclusion('fail','❌ 中断：请先上传图片');
+    resetDiagBtn();return;
+  }
+  setStep('img','ok',
+    `图片已就绪：${uploadedFile.name}`,
+    `大小: ${(uploadedFile.size/1024).toFixed(1)}KB  类型: ${uploadedFile.type}  ✓ 程序已成功获取到上传图片`);
+
+  // ─ 步骤2：Base64 转换 ─
+  setStep('b64','running','转换中...');
+  await sleep(200);
+  let b64DataUrl='';
+  try{
+    b64DataUrl=await fileToB64DataUrl(uploadedFile);
+    const kb=(b64DataUrl.length*0.75/1024).toFixed(0);
+    setStep('b64','ok',
+      `Base64 转换成功（约 ${kb}KB）`,
+      `前缀: ${b64DataUrl.slice(0,40)}...\n✓ 程序可以正确读取并编码参考图，传参环节无问题`);
+  }catch(e){
+    setStep('b64','fail',`转换失败：${e.message}`,'程序无法读取图片文件，请尝试重新上传');
+    showConclusion('fail','❌ 程序读取图片失败，请重新上传');
+    resetDiagBtn();return;
+  }
+
+  // ─ 步骤3：API Key ─
+  setStep('key','running','验证中...');
+  await sleep(150);
+  const key=getKey();
+  const epId=curProv==='doubao'?(document.getElementById('doubaoEp').value.trim()||localStorage.getItem('doubao_ep')||''):'';
+  if(!key){
+    setStep('key','fail','未配置 API Key','请在左侧切换引擎后填写 API Key 并保存');
+    showConclusion('fail','❌ 请先配置 API Key');
+    resetDiagBtn();return;
+  }
+  if(curProv==='doubao'&&!epId){
+    setStep('key','warn',`Key 已配置，但端点 ID 为空`,`豆包需要在 Key 下方填写 ep-xxxxx 格式的端点 ID`);
+  } else {
+    const epInfo=curProv==='doubao'?`  端点 ID: ${epId}`:'';
+    setStep('key','ok',`API Key 已配置（${key.length} 字符）`,`✓ 配置看起来正常${epInfo}`);
+  }
+
+  // ─ 步骤4：网络连通 ─
+  setStep('net','running','检测 API 服务...');
+  await sleep(200);
+  const endpoints={
+    stability:'https://api.stability.ai/v1/engines/list',
+    doubao:'https://ark.cn-beijing.volces.com/api/v3/models',
+    kling:'https://api.klingai.com/v1/images/generations',
+    jimeng:'https://visual.volcengineapi.com',
+  };
+  const testUrl=endpoints[curProv];
+  let netOk=false;
+  try{
+    const ctrl=new AbortController();
+    const timer=setTimeout(()=>ctrl.abort(),8000);
+    const res=await fetch(testUrl,{
+      method:'GET',
+      headers:{'Authorization':`Bearer ${key}`},
+      signal:ctrl.signal,
+    });
+    clearTimeout(timer);
+    netOk=true;
+    const statusTexts={
+      200:['ok','服务连通，接口正常','✓ 网络畅通，API 可正常访问'],
+      401:['warn','网络通畅，但 Key 认证失败','HTTP 401：Key 可能错误，但网络本身正常'],
+      403:['warn','网络通畅，权限受限','HTTP 403：Key 可能缺少相关权限'],
+      404:['warn','接口路径提示 404','HTTP 404：网络通，但接口路径不同（属正常，不影响生成接口）'],
+    };
+    const [st,msg,det]=statusTexts[res.status]||['warn',`HTTP ${res.status}`,`服务可达，状态码: ${res.status}`];
+    setStep('net',st,msg,det);
+    if(res.status===401) netOk=true; // key wrong but network is fine
+  }catch(e){
+    if(e.name==='AbortError'){
+      setStep('net','fail','连接超时（>8秒）',
+        '可能原因：\n1. 网络不通，请检查代理/VPN\n2. 浏览器 CORS 限制（建议用 python -m http.server 8080 启动本地服务）');
+    } else if(/cors|network|fetch/i.test(e.message)){
+      setStep('net','fail','CORS 跨域限制',
+        '浏览器安全策略阻止了直接请求。\n解决方法：\n命令行执行 "python -m http.server 8080"\n然后通过 http://localhost:8080 访问此文件');
+    } else {
+      setStep('net','fail',`连接失败：${e.message.slice(0,60)}`,'请检查网络连接和代理设置');
+    }
+    showConclusion('fail','❌ 网络问题：程序无法访问 API，需先解决网络连通性');
+    resetDiagBtn();return;
+  }
+
+  // ─ 步骤5：API 实际调用（含参考图）─
+  setStep('api','running','发送含参考图的测试请求...');
+  await sleep(300);
+
+  if(curProv==='doubao'&&!epId){
+    setStep('api','warn','跳过：端点 ID 未填写','请在左侧配置端点 ID 后重新诊断');
+    showConclusion('warn','⚠ 端点 ID 缺失，无法完成豆包 API 调用测试');
+    resetDiagBtn();return;
+  }
+
+  try{
+    // 压缩图片用于测试（减少等待时间）
+    const testB64=await compressForTest(uploadedFile,256);
+
+    let body,url,headers,method='POST';
+    if(curProv==='stability'){
+      // Stability: FormData
+      const fd=new FormData();
+      const blob=await(await fetch(testB64)).blob();
+      fd.append('init_image',blob,'test.jpg');
+      fd.append('init_image_mode','IMAGE_STRENGTH');
+      fd.append('image_strength','0.35');
+      fd.append('text_prompts[0][text]','product photography white background');
+      fd.append('text_prompts[0][weight]','1');
+      fd.append('cfg_scale','7');fd.append('samples','1');fd.append('steps','20');
+      url=`https://api.stability.ai/v1/generation/${getModel()}/image-to-image`;
+      headers={Authorization:`Bearer ${key}`,Accept:'application/json'};
+      body=fd;
+    } else if(curProv==='doubao'){
+      // 豆包: JSON
+      url='https://ark.cn-beijing.volces.com/api/v3/images/generations';
+      headers={'Content-Type':'application/json','Authorization':`Bearer ${key}`};
+      body=JSON.stringify({
+        model:epId,
+        prompt:'产品包装图，白色背景，正视图，专业商品摄影',
+        image:testB64,  // ← 诊断关键：传 base64 DataURL
+        response_format:'b64_json',
+        size:'512x512',
+        stream:false,watermark:false,
+      });
+    } else {
+      setStep('api','warn','当前引擎使用演示模式','Kling / 即梦 完整 API 实现待对接');
+      showConclusion('warn','⚠ 当前引擎使用演示模式，建议切换 Stability 或豆包进行完整测试');
+      resetDiagBtn();return;
+    }
+
+    const ctrl=new AbortController();
+    const timer=setTimeout(()=>ctrl.abort(),50000);
+    const res=await fetch(url,{method,headers,body,signal:ctrl.signal});
+    clearTimeout(timer);
+    const data=await res.json().catch(()=>({}));
+
+    if(res.ok){
+      const hasImg=data.artifacts?.[0]?.base64||data.data?.[0]?.b64_json||data.data?.[0]?.url;
+      if(hasImg){
+        setStep('api','ok',
+          '✅ API 调用成功，参考图被引擎正确识别！',
+          '程序传参正常，引擎成功处理了参考图并返回生成结果。\n可以放心开始正式生成。');
+        showConclusion('ok','✅ 全部检测通过！程序和引擎均工作正常，可以开始生成。');
+      } else {
+        setStep('api','warn','调用成功但响应格式异常',`响应: ${JSON.stringify(data).slice(0,120)}`);
+        showConclusion('warn','⚠ API 返回成功但格式不符合预期，可能是引擎版本差异');
+      }
+    } else {
+      const errMsg=data.error?.message||data.message||'';
+      // 精准判断：是程序问题还是引擎问题
+      let failType='',detail='';
+      if(/image|图片|参考图/i.test(errMsg)&&(res.status===400||res.status===422)){
+        failType='engine';
+        detail=`HTTP ${res.status}：${errMsg}\n\n📍 诊断结论：程序传图正常（步骤②已验证），但引擎拒绝了 base64 格式的参考图\n\n💡 解决方案：该 API 端点需要公开可访问的图片 URL，无法直接使用本地文件。\n需要先将图片上传到云存储（如 TOS/OSS）获取 URL 后再传入。`;
+        setStep('api','fail','❌ 引擎无法识别 Base64 格式参考图',detail);
+        showConclusion('fail','❌ 定位到问题：引擎不接受 base64 参考图，需要公开 URL');
+      } else if(/model|endpoint|ep-/i.test(errMsg)||res.status===404){
+        failType='endpoint';
+        detail=`HTTP ${res.status}：${errMsg}\n\n📍 端点 ID "${epId}" 无效或不存在\n💡 请在火山引擎控制台 → 方舟 → 我的端点 中查找并复制正确的 ep-xxxxx ID`;
+        setStep('api','fail','❌ 端点 ID 无效',detail);
+        showConclusion('fail','❌ 端点 ID 错误，请在控制台获取正确 ID');
+      } else if(res.status===401){
+        setStep('api','fail','❌ API Key 认证失败',`请确认 Key 是否完整且未过期`);
+        showConclusion('fail','❌ API Key 认证失败');
+      } else {
+        setStep('api','fail',`API 返回错误 ${res.status}`,`${errMsg.slice(0,200)||'无详细错误信息'}`);
+        showConclusion('fail',`❌ API 返回错误 ${res.status}，请查看步骤⑤详情`);
+      }
+    }
+  }catch(e){
+    if(e.name==='AbortError'){
+      setStep('api','warn','测试调用超时（>50秒）','生成本身耗时较长属正常，正式使用时请耐心等待');
+      showConclusion('warn','⚠ 测试超时（不代表失败），正式生成请直接尝试');
+    }else{
+      setStep('api','fail',`调用异常：${e.message.slice(0,80)}`,'');
+      showConclusion('fail','❌ 调用过程发生异常，请查看控制台详情');
+    }
+  }
+
+  resetDiagBtn();
+}
+
+function showConclusion(type,msg){
+  const el=document.getElementById('diagConclusion');
+  el.className=`diag-conclusion ${type} on`;
+  el.textContent=msg;
+}
+
+function resetDiagBtn(){
+  const btn=document.getElementById('diagBtn');
+  btn.disabled=false;
+  btn.textContent='▶ 重新诊断';
+}
+
+// ══════════════════════════════════════════
+//  RESULTS
+// ══════════════════════════════════════════
+function addCard(a,dataUrl,idx){
+  const g=document.getElementById('rgrid');
+  const c=document.createElement('div');
+  c.className='rcard';c.dataset.row=a.row;
+  c.style.animationDelay=(idx*0.07)+'s';
+  const fn=getFileName(a);
+  c.innerHTML=`
+    <div class="rimg">
+      <img src="${dataUrl}" alt="${a.name}" loading="lazy">
+      <div class="rovr"><button class="btn-dl-ovr" onclick="dlOne('${a.id}')">⬇ 下载 PNG</button></div>
+    </div>
+    <div class="rftr">
+      <div class="r-names">
+        <div class="r-name">${a.name} <span style="font-size:9px;color:var(--t3);margin-left:4px">${a.en}</span></div>
+        <div class="r-file">${fn}.png</div>
+      </div>
+      <button class="btn-dl-sm" onclick="dlOne('${a.id}')">PNG ⬇</button>
+    </div>`;
+  g.appendChild(c);
+}
+
+function dlOne(id){
+  const r=results.find(x=>x.angle.id===id);
+  if(!r)return;
+  const fn=getFileName(r.angle);
+  const a=document.createElement('a');a.href=r.dataUrl;a.download=fn+'.png';a.click();
+  dlCount++;document.getElementById('st-dl').textContent=dlCount;
+  toast(`✓ 下载：${fn}.png`,'ok');
+}
+
+async function dlAll(){
+  if(!results.length){toast('暂无图片','er');return}
+  const delay=parseInt(document.getElementById('dlDelay')?.value||500);
+  toast(`批量下载 ${results.length} 张...`,'ok');
+  for(let i=0;i<results.length;i++){
+    await new Promise(r=>setTimeout(r,delay));
+    const fn=getFileName(results[i].angle);
+    const a=document.createElement('a');a.href=results[i].dataUrl;a.download=fn+'.png';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    dlCount++;
+  }
+  document.getElementById('st-dl').textContent=dlCount;
+}
+
+function clearResults(){
+  results=[];
+  document.getElementById('rgrid').innerHTML='';
+  document.getElementById('rgrid').style.display='none';
+  document.getElementById('emptyState').style.display='flex';
+  document.getElementById('statusLabel').textContent='— 待生成';
+  document.getElementById('totalGen').textContent='0';
+  document.getElementById('st-gen').textContent='0';
+  document.getElementById('progBar').style.width='0%';
+  toast('✓ 已清空','ok');
+}
+
+// ══════════════════════════════════════════
+//  PROMPT MANAGEMENT
+// ══════════════════════════════════════════
+function buildAngleMap(){
+  const map=document.getElementById('angleMap');
+  if(!map)return;
+  map.innerHTML='';
+  [{row:0,col:'#4A74F3',label:'仰视组'},{row:1,col:'#7B68EE',label:'正视组'},{row:2,col:'#B55CE6',label:'俯视组'}].forEach(rg=>{
+    const wrap=document.createElement('div');wrap.className='row-grp';
+    const lbl=document.createElement('div');lbl.className='row-grp-lbl';
+    lbl.style.background=rg.col+'22';lbl.style.color=rg.col;lbl.textContent=rg.label;
+    wrap.appendChild(lbl);
+    const row=document.createElement('div');row.className='map-row';
+    ANGLES.filter(a=>a.row===rg.row).forEach(a=>{
+      const cell=document.createElement('div');cell.className='map-cell';cell.dataset.id=a.id;
+      cell.style.background=rg.col+'22';cell.style.borderColor=rg.col+'44';
+      cell.innerHTML=`<span class="mc-code">${a.en}</span><span class="mc-name">${a.name}</span>`;
+      cell.onclick=()=>selectMapAngle(a.id);
+      row.appendChild(cell);
+    });
+    wrap.appendChild(row);map.appendChild(wrap);
+  });
+}
+
+function selectMapAngle(id){
+  activeMapAngle=id;
+  document.querySelectorAll('.map-cell').forEach(c=>{
+    const a=ANGLES.find(x=>x.id===c.dataset.id);
+    c.classList.toggle('active-cell',c.dataset.id===id);
+    c.style.borderColor=c.dataset.id===id?'#fff':(a.rowColor+'44');
+  });
+  renderPromptEditor(id);
+}
+
+function renderPromptEditor(id){
+  const a=ANGLES.find(x=>x.id===id);if(!a)return;
+  const custom=customPrompts[id]||{};
+  const prompt=custom.prompt||a.prompt;
+  const neg=custom.neg||a.neg;
+  const kws=['luxury packaging','premium cosmetic','glass bottle','matte finish','rose gold','metallic','minimalist','high-end brand'];
+  document.getElementById('promptEditorPanel').innerHTML=`
+    <div class="ped-hdr">
+      <div class="ped-badge" style="background:${a.rowColor}22;color:${a.rowColor};border:1px solid ${a.rowColor}44">${a.en}</div>
+      <div class="ped-name">${a.name}</div>
+      <div class="ped-en" style="color:${a.rowColor}">${a.rowName}</div>
+    </div>
+    <div class="ped-lbl">正向提示词 <span>Positive Prompt</span></div>
+    <textarea class="prompt-ta" id="ped-pos" rows="4">${prompt}</textarea>
+    <div class="ped-lbl">负向提示词 <span>Negative Prompt</span></div>
+    <textarea class="prompt-ta" id="ped-neg" rows="3">${neg}</textarea>
+    <div class="ped-lbl">快捷关键词</div>
+    <div class="kw-tags">${kws.map(k=>`<span class="kw-tag" onclick="appendKw('${k}')">${k}</span>`).join('')}</div>
+    <div class="ped-acts">
+      <button class="btn-ped-save" onclick="saveAnglePrompt('${id}')">💾 保存此视角</button>
+      <button class="btn-ped-reset" onclick="resetAnglePrompt('${id}')">↺ 恢复默认</button>
+    </div>`;
+}
+
+function appendKw(kw){const el=document.getElementById('ped-pos');if(el)el.value=(el.value?el.value+', ':'')+kw}
+
+function saveAnglePrompt(id){
+  const pos=document.getElementById('ped-pos')?.value.trim();
+  const neg=document.getElementById('ped-neg')?.value.trim();
+  if(!pos){toast('提示词不能为空','er');return}
+  customPrompts[id]={prompt:pos,neg:neg||''};
+  localStorage.setItem('customPrompts',JSON.stringify(customPrompts));
+  toast(`✓ ${ANGLES.find(a=>a.id===id)?.name} 提示词已保存`,'ok');
+}
+
+function resetAnglePrompt(id){
+  delete customPrompts[id];
+  localStorage.setItem('customPrompts',JSON.stringify(customPrompts));
+  renderPromptEditor(id);toast('↺ 已恢复默认','ok');
+}
+
+function saveAllPrompts(){
+  localStorage.setItem('customPrompts',JSON.stringify(customPrompts));
+  toast('✓ 所有提示词已保存','ok');
+}
+
+function loadCustomPrompts(){
+  try{const s=localStorage.getItem('customPrompts');if(s)customPrompts=JSON.parse(s)}catch(e){}
+}
+
+function getPrompt(a){
+  const c=customPrompts[a.id];
+  return {prompt:c?.prompt||a.prompt,neg:c?.neg||a.neg};
+}
+
+// ══════════════════════════════════════════
+//  ADMIN
+// ══════════════════════════════════════════
+function openAdmin(){
+  document.getElementById('adminOverlay').classList.add('on');
+  document.getElementById('diagProvLabel').textContent=PROVS[curProv].label;
+}
+function closeAdmin(){document.getElementById('adminOverlay').classList.remove('on')}
+function closeAdminBg(e){if(e.target===document.getElementById('adminOverlay'))closeAdmin()}
+
+// ══════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════
+function toast(msg,type=''){
+  const w=document.getElementById('toasts');
+  const el=document.createElement('div');
+  el.className='toast '+(type||'');
+  el.innerHTML=`<span>${type==='ok'?'✓':type==='er'?'✗':'ℹ'}</span>${msg}`;
+  w.appendChild(el);
+  setTimeout(()=>el.remove(),3500);
+}
+</script>
+</body>
+</html>
