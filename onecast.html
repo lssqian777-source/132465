@@ -1,0 +1,1737 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OneCast · 自媒体一键分发控制台</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#08090e;--panel:#10121a;--panel2:#151824;--panel3:#1b1f2d;
+  --line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.12);
+  --txt:#eef1f8;--muted:#8c92a8;--dim:#5d6379;
+  --accent:#6d8cff;--accent2:#a06bff;--ok:#35d39a;--warn:#f5b942;--err:#ff6b6b;--manual:#57b6ff;
+  --glow:rgba(109,140,255,.22);--r:14px;
+}
+html,body{min-height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+  background:
+    radial-gradient(900px 500px at 12% -8%,rgba(109,140,255,.13),transparent 60%),
+    radial-gradient(800px 500px at 92% 4%,rgba(160,107,255,.11),transparent 55%),
+    var(--bg);
+  color:var(--txt);font-size:13px;line-height:1.55;-webkit-font-smoothing:antialiased;
+}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#262b3b;border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* top bar */
+.topbar{position:sticky;top:0;z-index:60;height:58px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;background:rgba(8,9,14,.82);border-bottom:1px solid var(--line);backdrop-filter:blur(18px)}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:grid;place-items:center;box-shadow:0 6px 22px var(--glow);flex-shrink:0}
+.logo svg{width:17px;height:17px}
+.brand-name{font-size:14px;font-weight:800;letter-spacing:.2px}
+.brand-sub{font-size:10px;color:var(--dim);letter-spacing:1.2px;text-transform:uppercase;margin-top:-2px}
+.top-right{display:flex;align-items:center;gap:8px}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:3px}
+.seg button{padding:4px 10px;border-radius:6px;font-size:11px;color:var(--muted);font-weight:600;transition:.18s}
+.seg button.on{background:var(--panel3);color:var(--txt);box-shadow:0 1px 6px rgba(0,0,0,.35)}
+.vault-pill{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel);font-size:11px;color:var(--muted);transition:.2s;white-space:nowrap}
+.vault-pill:hover{border-color:var(--line2);color:var(--txt)}
+.vault-pill.ok{border-color:rgba(53,211,154,.32);color:var(--ok);background:rgba(53,211,154,.07)}
+.vault-pill.warn{border-color:rgba(245,185,66,.32);color:var(--warn);background:rgba(245,185,66,.07)}
+.icon-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--panel);
+  display:grid;place-items:center;color:var(--muted);transition:.2s}
+.icon-btn:hover{color:var(--txt);border-color:var(--line2)}
+.icon-btn svg{width:15px;height:15px}
+
+/* shell */
+.shell{display:grid;grid-template-columns:246px minmax(0,1fr) 306px;gap:16px;
+  max-width:1560px;margin:0 auto;padding:16px 18px 104px}
+.rail-left{position:sticky;top:74px;align-self:start;max-height:calc(100vh - 168px);overflow:auto}
+.rail-right{display:flex;flex-direction:column;gap:14px;position:sticky;top:74px;align-self:start;
+  max-height:calc(100vh - 168px);overflow:auto}
+.card{background:rgba(16,18,26,.86);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:0 10px 30px rgba(0,0,0,.22)}
+.card-pad{padding:15px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:11px}
+.card-title{font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--txt);display:flex;align-items:center;gap:7px}
+.card-title .sub{font-size:10px;color:var(--dim);font-weight:500;letter-spacing:0}
+.card-title .line{width:3px;height:13px;border-radius:2px;background:linear-gradient(var(--accent),var(--accent2))}
+
+/* main */
+.main{min-width:0;display:flex;flex-direction:column;gap:14px}
+.hero{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:6px 2px 2px}
+.hero h1{font-size:21px;letter-spacing:-.3px;font-weight:800}
+.hero p{font-size:11.5px;color:var(--muted);margin-top:4px;max-width:620px}
+.hero-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{font-size:10.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);
+  padding:3px 9px;border-radius:20px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.chip b{color:var(--txt);font-weight:700}
+.chip .dot{width:5px;height:5px;border-radius:50%;background:var(--ok)}
+.hero-action{flex-shrink:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;border-radius:9px;
+  font-size:12px;font-weight:700;transition:.18s;border:1px solid transparent;white-space:nowrap}
+.btn svg{width:14px;height:14px}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;
+  box-shadow:0 8px 24px rgba(109,140,255,.28)}
+.btn.primary:hover{transform:translateY(-1px);box-shadow:0 10px 28px rgba(109,140,255,.36)}
+.btn.primary:disabled{opacity:.45;transform:none;cursor:not-allowed;box-shadow:none}
+.btn.ghost{border-color:var(--line2);background:var(--panel);color:var(--muted)}
+.btn.ghost:hover{color:var(--txt);background:var(--panel2)}
+.btn.danger{color:var(--err);border-color:rgba(255,107,107,.3);background:rgba(255,107,107,.06)}
+.btn.danger:hover{background:rgba(255,107,107,.12)}
+.btn.full{width:100%}
+.btn.mini{padding:4px 8px;font-size:10.5px;border-radius:6px;border-color:var(--line);background:var(--panel3);color:var(--muted)}
+.btn.mini:hover{color:var(--txt);border-color:var(--line2)}
+.btn.mini.accent{color:var(--accent);border-color:rgba(109,140,255,.3);background:rgba(109,140,255,.08)}
+
+.step-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.step-left{display:flex;align-items:center;gap:9px}
+.step-num{width:22px;height:22px;border-radius:7px;background:rgba(109,140,255,.14);border:1px solid rgba(109,140,255,.28);
+  color:var(--accent);font-size:10px;font-weight:800;display:grid;place-items:center}
+.step-head h2{font-size:13.5px;font-weight:700}
+.step-head .hint{font-size:10.5px;color:var(--dim);font-weight:400}
+
+/* upload */
+.dropzone{position:relative;border:1.5px dashed rgba(109,140,255,.28);border-radius:11px;background:rgba(109,140,255,.035);
+  padding:20px 14px;text-align:center;transition:.2s;overflow:hidden}
+.dropzone:hover,.dropzone.drag{border-color:rgba(109,140,255,.65);background:rgba(109,140,255,.08)}
+.dropzone input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;z-index:2}
+.dz-ico{width:36px;height:36px;border-radius:10px;margin:0 auto 8px;display:grid;place-items:center;
+  background:rgba(109,140,255,.12);color:var(--accent)}
+.dz-ico svg{width:18px;height:18px}
+.dz-t{font-size:12.5px;font-weight:600}
+.dz-s{font-size:10.5px;color:var(--dim);margin-top:3px}
+.dz-actions{display:flex;gap:6px;justify-content:center;margin-top:11px;position:relative;z-index:3}
+
+.media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:11px}
+.m-item{position:relative;border-radius:9px;overflow:hidden;background:#0b0d14;border:1px solid var(--line);aspect-ratio:1}
+.m-item img{width:100%;height:100%;object-fit:cover;display:block}
+.m-video{width:100%;height:100%;display:grid;place-items:center;background:
+  radial-gradient(circle at 30% 25%,rgba(109,140,255,.28),transparent 55%),#11141d;color:#cfd6ff}
+.m-video svg{width:24px;height:24px;opacity:.9}
+.m-video span{position:absolute;bottom:6px;left:7px;font-size:9px;color:var(--muted)}
+.m-x{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:rgba(5,6,10,.78);
+  color:#fff;font-size:11px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.18);z-index:2}
+.m-x:hover{background:var(--err)}
+.m-name{position:absolute;left:0;right:0;bottom:0;padding:14px 6px 4px;font-size:9px;color:#dfe4f5;
+  background:linear-gradient(transparent,rgba(0,0,0,.82));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;font-size:10.5px;color:var(--dim)}
+.meta-row code{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--muted);background:var(--panel2);
+  padding:2px 6px;border-radius:4px}
+.cover-row{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.cover-box{width:46px;height:46px;border-radius:7px;background:var(--panel2);border:1px dashed var(--line2);
+  display:grid;place-items:center;font-size:9px;color:var(--dim);overflow:hidden;position:relative;flex-shrink:0}
+.cover-box img{width:100%;height:100%;object-fit:cover}
+.cover-box input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.cover-txt{font-size:10.5px;color:var(--dim);line-height:1.6}
+.cover-txt b{color:var(--muted);font-weight:600}
+
+/* form */
+.field{margin-bottom:9px}
+.field:last-child{margin-bottom:0}
+.field label{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-bottom:5px}
+.field label .cnt{color:var(--dim);font-size:10px;font-variant-numeric:tabular-nums}
+.field label .cnt.over{color:var(--err)}
+.inp,.ta,.sel{width:100%;background:#0b0d14;border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+  color:var(--txt);font-size:12px;outline:none;transition:.2s}
+.inp:focus,.ta:focus,.sel:focus{border-color:rgba(109,140,255,.6);box-shadow:0 0 0 3px rgba(109,140,255,.1)}
+.ta{resize:vertical;min-height:88px;line-height:1.7}
+.sel{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M0 0l4.5 6L9 0z' fill='%238c92a8'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.inline-hint{font-size:10px;color:var(--dim);margin-top:5px;line-height:1.6}
+.inline-hint strong{color:var(--muted);font-weight:600}
+
+/* matrix */
+.matrix-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.select-all{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);cursor:pointer;user-select:none}
+.select-all input{accent-color:var(--accent);width:13px;height:13px}
+.toolbar-actions{display:flex;gap:6px;flex-wrap:wrap}
+.matrix{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.matrix-head{display:grid;grid-template-columns:24px minmax(118px,1.2fr) minmax(120px,1.3fr) 104px 56px 88px;
+  gap:6px;padding:8px 10px;background:var(--panel2);border-bottom:1px solid var(--line);
+  font-size:9.5px;color:var(--dim);letter-spacing:.4px;text-transform:uppercase}
+.prow{border-bottom:1px solid var(--line)}
+.prow:last-child{border-bottom:none}
+.prow-main{display:grid;grid-template-columns:24px minmax(118px,1.2fr) minmax(120px,1.3fr) 104px 56px 88px;
+  gap:6px;padding:9px 10px;align-items:center;transition:.15s}
+.prow-main:hover{background:rgba(255,255,255,.018)}
+.pf{display:flex;align-items:center;gap:7px;min-width:0}
+.mark{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex-shrink:0;
+  background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;font-size:9.5px;font-weight:800;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.pf b{font-size:11.5px;font-weight:700;display:block;line-height:1.25;white-space:nowrap}
+.pf span{font-size:9px;color:var(--dim);display:block;white-space:nowrap}
+.p-acct{min-width:0;font-size:10.5px;color:var(--muted);display:flex;flex-direction:column;gap:1px}
+.muted{color:var(--dim)}
+.p-acct .handle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st{font-style:normal;font-size:9px;color:var(--dim);display:flex;align-items:center;gap:3px}
+.st::before{content:"";width:4px;height:4px;border-radius:50%;background:var(--dim)}
+.st.connected::before{background:var(--ok)}
+.st.pending::before{background:var(--warn)}
+.st.manual::before{background:var(--manual)}
+.st.expired::before,.st.unlinked::before{background:var(--dim)}
+.vchip{font-size:9.5px;display:inline-flex;align-items:center;gap:4px;max-width:100%;
+  padding:3px 6px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vchip::before{content:"";width:5px;height:5px;border-radius:50%;flex-shrink:0;background:var(--dim)}
+.vchip.ok{color:var(--ok);background:rgba(53,211,154,.07);border-color:rgba(53,211,154,.2)}
+.vchip.ok::before{background:var(--ok)}
+.vchip.warn{color:var(--warn);background:rgba(245,185,66,.06);border-color:rgba(245,185,66,.2)}
+.vchip.warn::before{background:var(--warn)}
+.vchip.err{color:var(--err);background:rgba(255,107,107,.07);border-color:rgba(255,107,107,.2)}
+.vchip.err::before{background:var(--err)}
+.vchip.run{color:var(--accent);background:rgba(109,140,255,.1);border-color:rgba(109,140,255,.24)}
+.vchip.run::before{background:var(--accent);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.p-count{font-size:10px;color:var(--dim);text-align:center;font-variant-numeric:tabular-nums}
+.p-acts{display:flex;gap:4px;justify-content:flex-end}
+.override{display:none;padding:0 12px 12px;background:#0b0d14;border-top:1px dashed var(--line)}
+.override.on{display:block}
+.override .two-col{margin-top:10px}
+.override textarea{min-height:64px}
+
+/* badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:5px;font-size:9px;
+  font-weight:700;letter-spacing:.2px;white-space:nowrap;border:1px solid}
+.badge.official{color:var(--ok);background:rgba(53,211,154,.08);border-color:rgba(53,211,154,.22)}
+.badge.semi{color:var(--warn);background:rgba(245,185,66,.07);border-color:rgba(245,185,66,.22)}
+.badge.none{color:var(--err);background:rgba(255,107,107,.07);border-color:rgba(255,107,107,.22)}
+.badge.manual{color:var(--manual);background:rgba(87,182,255,.08);border-color:rgba(87,182,255,.22)}
+
+/* accounts rail */
+.acct{width:100%;display:flex;align-items:center;gap:9px;padding:7px;border-radius:9px;text-align:left;
+  border:1px solid transparent;transition:.15s;margin-bottom:1px}
+.acct:hover{background:var(--panel2);border-color:var(--line)}
+.acct-info{flex:1;min-width:0}
+.acct-name{display:block;font-size:11.5px;font-weight:600;line-height:1.3}
+.acct-handle{display:block;font-size:9.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--dim);flex-shrink:0}
+.dot.connected{background:var(--ok);box-shadow:0 0 0 3px rgba(53,211,154,.12)}
+.dot.pending{background:var(--warn);box-shadow:0 0 0 3px rgba(245,185,66,.1)}
+.dot.manual{background:var(--manual);box-shadow:0 0 0 3px rgba(87,182,255,.1)}
+.dot.expired{background:var(--err)}
+.rail-sep{height:1px;background:var(--line);margin:10px 0}
+
+/* right rail */
+.safety-level{display:flex;align-items:baseline;gap:7px;margin-bottom:9px}
+.safety-level b{font-size:19px;font-weight:800}
+.safety-level .lv-high{color:var(--ok)}
+.safety-level .lv-mid{color:var(--warn)}
+.safety-level .lv-low{color:var(--err)}
+.safety-level span{font-size:10.5px;color:var(--dim)}
+.check-list{display:flex;flex-direction:column;gap:7px}
+.check-item{display:flex;align-items:flex-start;gap:7px;font-size:10.5px;color:var(--muted);line-height:1.55}
+.check-item .ci{width:14px;height:14px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;margin-top:1px;
+  background:rgba(53,211,154,.12);color:var(--ok);font-size:8px;border:1px solid rgba(53,211,154,.25)}
+.check-item .ci.no{background:rgba(255,107,107,.1);color:var(--err);border-color:rgba(255,107,107,.25)}
+.check-item b{color:var(--txt);font-weight:600}
+.cap-list{display:flex;flex-direction:column;gap:1px}
+.cap-row{display:flex;align-items:center;gap:7px;padding:6px 4px;border-radius:6px;font-size:10.5px}
+.cap-row:hover{background:rgba(255,255,255,.02)}
+.cap-row .mark{width:20px;height:20px;border-radius:5px;font-size:8px}
+.cap-row .cap-name{flex:1;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap-row .badge{font-size:8px;padding:1px 5px}
+.audit-list{display:flex;flex-direction:column;gap:0}
+.audit-row{display:flex;align-items:center;gap:7px;padding:6px 2px;border-bottom:1px dashed var(--line);font-size:10px;color:var(--muted)}
+.audit-row:last-child{border-bottom:none}
+.audit-row .time{color:var(--dim);font-variant-numeric:tabular-nums;flex-shrink:0;font-size:9.5px}
+.audit-row .who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.audit-empty{font-size:10.5px;color:var(--dim);text-align:center;padding:14px 0}
+.tagline{font-size:9.5px;color:var(--dim);line-height:1.7;margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}
+
+/* action bar */
+.actionbar{position:fixed;left:0;right:0;bottom:0;z-index:55;height:70px;display:flex;align-items:center;justify-content:space-between;
+  gap:14px;padding:0 22px;background:rgba(9,10,16,.9);border-top:1px solid var(--line);backdrop-filter:blur(18px)}
+.ab-left{display:flex;align-items:center;gap:14px;min-width:0}
+.ab-sum{font-size:11px;color:var(--muted);white-space:nowrap}
+.ab-sum b{color:var(--txt)}
+.ab-sum .sep{color:var(--dim);margin:0 5px}
+.switch-wrap{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.switch{width:32px;height:18px;border-radius:20px;background:#2a2f40;border:1px solid var(--line2);position:relative;transition:.2s;flex-shrink:0}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#8c92a8;transition:.2s}
+.switch.on{background:rgba(53,211,154,.3);border-color:rgba(53,211,154,.4)}
+.switch.on::after{left:16px;background:var(--ok)}
+.ab-right{display:flex;align-items:center;gap:8px}
+.publish-btn{padding:10px 22px;font-size:12.5px}
+.publish-btn .kbd{font-size:9px;background:rgba(255,255,255,.15);padding:1px 4px;border-radius:3px;font-weight:600}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;z-index:100;background:rgba(3,4,8,.74);backdrop-filter:blur(5px);
+  display:none;align-items:center;justify-content:center;padding:18px}
+.modal-bg.on{display:flex}
+.modal{width:min(560px,94vw);max-height:88vh;overflow:hidden;background:#11131c;border:1px solid var(--line2);
+  border-radius:17px;box-shadow:0 30px 90px rgba(0,0,0,.6);animation:pop .18s ease-out;
+  display:flex;flex-direction:column}
+.modal.wide{width:min(760px,95vw)}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+.modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--line);flex-shrink:0}
+.modal-head h3{font-size:15px;font-weight:700}
+.modal-head p{font-size:10.5px;color:var(--dim);margin-top:2px}
+.modal-body{padding:16px 18px;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.modal-foot{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;padding:12px 18px 16px;border-top:1px solid var(--line);flex-shrink:0;background:#11131c}
+.x-close{width:26px;height:26px;border-radius:7px;color:var(--dim);display:grid;place-items:center;font-size:16px;flex-shrink:0}
+.x-close:hover{background:var(--panel3);color:var(--txt)}
+.gate-box{padding:9px 11px;border-radius:8px;background:rgba(109,140,255,.06);border:1px solid rgba(109,140,255,.16);
+  font-size:10px;color:var(--muted);line-height:1.7;margin-bottom:12px}
+.gate-box b{color:var(--txt)}
+.gate-box .links{margin-top:4px}
+.gate-box .links a{margin-right:10px;font-size:10px}
+.pass-wrap{position:relative}
+.pass-wrap .inp{padding-right:36px}
+.eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:10px;padding:3px}
+.form-note{font-size:10px;color:var(--dim);line-height:1.7;margin-top:8px}
+.radio-row{display:flex;gap:6px;flex-wrap:wrap}
+.radio-row label{font-size:10.5px;color:var(--muted);border:1px solid var(--line);background:#0b0d14;
+  padding:6px 9px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:5px}
+.radio-row label:has(input:checked){border-color:rgba(109,140,255,.55);color:var(--accent);background:rgba(109,140,255,.08)}
+.radio-row input{accent-color:var(--accent)}
+.confirm-list{display:flex;flex-direction:column;gap:6px;margin:10px 0 13px;max-height:220px;overflow:auto}
+.confirm-row{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;background:var(--panel2);
+  border:1px solid var(--line);font-size:10.5px;color:var(--muted)}
+.confirm-row .mark{width:20px;height:20px;border-radius:5px;font-size:8px}
+.confirm-row .cnt{flex:1;min-width:0}
+.confirm-row .cnt b{display:block;font-size:11px;color:var(--txt);font-weight:600}
+.confirm-row .cnt span{font-size:9.5px;color:var(--dim);display:block}
+.confirm-check{display:flex;align-items:flex-start;gap:8px;font-size:10.5px;color:var(--muted);line-height:1.6;cursor:pointer;user-select:none}
+.confirm-check input{accent-color:var(--accent);width:14px;height:14px;margin-top:1px;flex-shrink:0}
+.warn-box{padding:9px 11px;border-radius:8px;background:rgba(245,185,66,.06);border:1px solid rgba(245,185,66,.22);
+  font-size:10px;color:rgba(245,185,66,.9);line-height:1.7;margin-bottom:10px}
+.warn-box.err{background:rgba(255,107,107,.06);border-color:rgba(255,107,107,.24);color:#ff9a9a}
+
+/* guide */
+.guide h4{font-size:12px;font-weight:700;margin:16px 0 7px;color:var(--txt)}
+.guide h4:first-child{margin-top:0}
+.guide p,.guide li{font-size:11px;color:var(--muted);line-height:1.75}
+.guide ul{padding-left:16px;margin:4px 0}
+.guide table{width:100%;border-collapse:collapse;font-size:10px;margin:7px 0 4px}
+.guide th{text-align:left;color:var(--dim);font-weight:600;padding:6px;border-bottom:1px solid var(--line2);font-size:9.5px;text-transform:uppercase;letter-spacing:.3px}
+.guide td{padding:6px;border-bottom:1px solid var(--line);color:var(--muted);vertical-align:top}
+.guide td b{color:var(--txt);font-weight:600}
+.guide code{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;background:var(--panel2);
+  padding:1px 5px;border-radius:4px;color:#c7d2ff;word-break:break-all}
+.code-block{background:#0a0c12;border:1px solid var(--line);border-radius:8px;padding:10px;margin:7px 0;
+  font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:#b9c4e6;line-height:1.7;white-space:pre-wrap;word-break:break-all}
+.verdict{display:flex;gap:8px;padding:9px 11px;border-radius:8px;margin:6px 0;font-size:10.5px;line-height:1.65;border:1px solid}
+.verdict.safe{background:rgba(53,211,154,.06);border-color:rgba(53,211,154,.22);color:#9be9cd}
+.verdict.fast{background:rgba(245,185,66,.06);border-color:rgba(245,185,66,.22);color:#f3d18a}
+.verdict.best{background:rgba(109,140,255,.07);border-color:rgba(109,140,255,.25);color:#b9c8ff}
+.verdict b{display:block;font-size:10px;letter-spacing:.3px;margin-bottom:1px}
+
+/* toast */
+.toasts{position:fixed;right:18px;bottom:86px;z-index:200;display:flex;flex-direction:column;gap:7px;align-items:flex-end;pointer-events:none}
+.toast{background:#181c28;border:1px solid var(--line2);border-radius:9px;padding:9px 13px;font-size:11px;color:var(--txt);
+  box-shadow:0 10px 30px rgba(0,0,0,.4);max-width:340px;animation:pop .18s ease-out;pointer-events:auto}
+.toast.ok{border-color:rgba(53,211,154,.35)}
+.toast.err{border-color:rgba(255,107,107,.35)}
+.toast.warn{border-color:rgba(245,185,66,.35)}
+.toast .t-title{font-weight:700;font-size:11px}
+.toast .t-sub{font-size:10px;color:var(--muted);margin-top:2px}
+
+.empty-state{text-align:center;padding:24px 10px;color:var(--dim);font-size:11px}
+.empty-state .es-ico{font-size:22px;margin-bottom:5px;opacity:.6}
+
+@media(max-width:1240px){
+  .shell{grid-template-columns:224px minmax(0,1fr) 276px;gap:12px}
+  .matrix-head,.prow-main{grid-template-columns:22px minmax(104px,1.1fr) minmax(104px,1.2fr) 88px 50px 80px}
+}
+@media(max-width:1080px){
+  .shell{grid-template-columns:220px minmax(0,1fr)}
+  .rail-right{grid-column:2;display:grid;grid-template-columns:1fr 1fr;align-items:start;
+    position:static;max-height:none;overflow:visible}
+}
+@media(max-width:820px){
+  .topbar{height:auto;min-height:54px;padding:8px 12px;flex-wrap:wrap;gap:8px}
+  .brand-sub{display:none}
+  .top-right{flex-wrap:wrap;justify-content:flex-end;gap:6px}
+  .vault-pill{max-width:140px;overflow:hidden}
+  .vault-pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .modal-foot{justify-content:flex-start}
+  .shell{grid-template-columns:1fr;padding-bottom:96px}
+  .rail-left{position:static;max-height:none}
+  .rail-left .acct-list{display:grid;grid-template-columns:1fr 1fr;gap:2px}
+  .rail-right{grid-column:1;grid-template-columns:1fr}
+  .matrix-head{display:none}
+  .prow-main{grid-template-columns:22px 1fr 88px;grid-template-areas:"check pf valid" ". acct acct" ". acts acts";row-gap:5px}
+  .prow-main .check{grid-area:check}
+  .prow-main .pf{grid-area:pf}
+  .prow-main .p-acct{grid-area:acct;flex-direction:row;gap:7px;align-items:center}
+  .prow-main .p-valid{grid-area:valid;justify-self:end}
+  .prow-main .p-count{display:none}
+  .prow-main .p-acts{grid-area:acts;justify-content:flex-start}
+  .actionbar{height:auto;min-height:64px;padding:8px 14px;flex-wrap:wrap}
+  .ab-sum{display:none}
+  .ab-left{gap:8px}
+  .hero{flex-direction:column}
+  .two-col,.three-col{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .brand-name span{display:none}
+  .vault-pill span{display:none}
+  .vault-pill{padding:6px 8px}
+  .seg button{padding:4px 8px}
+  .switch-wrap span{display:none}
+  .publish-btn{padding:9px 14px}
+  .publish-btn .kbd{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+    </div>
+    <div>
+      <div class="brand-name">OneCast <span style="color:var(--dim);font-weight:500">一键分发</span></div>
+      <div class="brand-sub">Local-first Publisher</div>
+    </div>
+  </div>
+  <div class="top-right">
+    <div class="seg" id="modeSeg">
+      <button data-mode="demo" class="on">演示模式</button>
+      <button data-mode="live">已连接后端</button>
+    </div>
+    <button class="vault-pill" id="vaultPill" title="加密保险箱">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      <span id="vaultText">未设置保险箱</span>
+    </button>
+    <button class="icon-btn" id="btnSettings" title="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 9c.16.6.68 1.04 1.55 1.04H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="shell">
+  <!-- 左栏：账号矩阵 -->
+  <aside class="rail-left card card-pad" style="padding:13px 11px">
+    <div class="card-head" style="margin-bottom:8px">
+      <div class="card-title"><span class="line"></span>账号矩阵</div>
+      <button class="btn mini" id="btnPrefill">预填</button>
+    </div>
+    <div id="accountList" class="acct-list"></div>
+    <div class="rail-sep"></div>
+    <button class="btn ghost full" id="btnAddAccount" style="margin-bottom:7px">＋ 添加 / 编辑账号</button>
+    <div class="tagline">
+      只保存授权凭据，不保存平台密码。凭据在本机 AES-GCM 加密。
+    </div>
+  </aside>
+
+  <!-- 中栏 -->
+  <main class="main">
+    <div class="hero">
+      <div>
+        <h1>一键分发控制台</h1>
+        <p>一份素材，多平台适配。官方接口优先，无公开接口的平台自动生成草稿并转人工确认。</p>
+        <div class="hero-chips">
+          <span class="chip"><span class="dot"></span>已选 <b id="chipSelected">7</b> 个平台</span>
+          <span class="chip">通过校验 <b id="chipReady">0</b></span>
+          <span class="chip">官方/半官方 <b id="chipOfficial">0</b></span>
+          <span class="chip">今日已发 <b id="chipToday">0</b></span>
+        </div>
+      </div>
+      <div class="hero-action">
+        <button class="btn ghost" data-guide>接入方案与依据</button>
+      </div>
+    </div>
+
+    <!-- 1 素材 -->
+    <section class="card card-pad">
+      <div class="step-head">
+        <div class="step-left"><span class="step-num">1</span><h2>素材</h2></div>
+        <span class="hint">图片 ≤ 18 张，或单个视频；支持拖拽</span>
+      </div>
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept="image/*,video/*" multiple>
+        <div class="dz-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5-5 5 5"/><path d="M12 5v13"/></svg>
+        </div>
+        <div class="dz-t">拖入图片或视频</div>
+        <div class="dz-s">文件只在本机预览，不上传服务器</div>
+        <div class="dz-actions">
+          <button class="btn mini accent" type="button" id="btnSample">使用示例素材</button>
+          <button class="btn mini" type="button" id="btnPick">选择文件</button>
+        </div>
+      </div>
+      <div class="media-grid" id="mediaGrid"></div>
+      <div class="meta-row" id="mediaMeta" style="display:none"></div>
+      <div class="cover-row">
+        <div class="cover-box">
+          <span id="coverPh">封面</span>
+          <input type="file" id="coverInput" accept="image/*">
+        </div>
+        <div class="cover-txt"><b>封面（可选）</b><br>B 站、视频号等平台建议上传 16:9 或 3:4 封面</div>
+        <button class="btn mini" id="btnClearCover" style="margin-left:auto">清除</button>
+      </div>
+    </section>
+
+    <!-- 2 文案 -->
+    <section class="card card-pad">
+      <div class="step-head">
+        <div class="step-left"><span class="step-num">2</span><h2>文案</h2></div>
+        <span class="hint">按平台限制实时校验，可在下方逐平台覆盖</span>
+      </div>
+      <div class="field">
+        <label>标题 <span class="cnt" id="titleCnt">0 / 80</span></label>
+        <input class="inp" id="titleInput" placeholder="例如：3 个提升通勤效率的小习惯" maxlength="120">
+      </div>
+      <div class="field">
+        <label>正文 <span class="cnt" id="bodyCnt">0 / 2200</span></label>
+        <textarea class="ta" id="bodyInput" placeholder="正文、话题、@ 等。各平台差异可在下方单独覆盖。"></textarea>
+      </div>
+      <div class="two-col">
+        <div class="field">
+          <label>话题标签 <span class="cnt" id="tagCnt">0 个</span></label>
+          <input class="inp" id="tagsInput" placeholder="#通勤 #效率 #好物">
+        </div>
+        <div class="field">
+          <label>默认可见范围</label>
+          <select class="sel" id="visSelect">
+            <option value="public">公开</option>
+            <option value="friends">仅好友 / 关注者</option>
+            <option value="private">仅自己</option>
+          </select>
+        </div>
+      </div>
+      <div class="inline-hint">标签用空格或逗号分隔。正文中的链接在 X 上会产生额外费用（含链接帖 $0.20/条）。</div>
+    </section>
+
+    <!-- 3 平台 -->
+    <section class="card card-pad">
+      <div class="step-head">
+        <div class="step-left"><span class="step-num">3</span><h2>平台矩阵</h2></div>
+        <span class="hint">逐平台状态与频次保护</span>
+      </div>
+      <div class="matrix-toolbar">
+        <label class="select-all"><input type="checkbox" id="checkAll"> 全选</label>
+        <div class="toolbar-actions">
+          <button class="btn mini" id="btnSelectOfficial">仅选官方 API</button>
+          <button class="btn mini" id="btnClearSel">清空选择</button>
+        </div>
+      </div>
+      <div class="matrix">
+        <div class="matrix-head">
+          <span></span><span>平台</span><span>账号</span><span>状态</span><span style="text-align:center">今日</span><span style="text-align:right">操作</span>
+        </div>
+        <div id="matrix"></div>
+      </div>
+      <div class="inline-hint" style="margin-top:9px">
+        状态含义：<b style="color:var(--ok)">就绪</b> 可直接提交 ·
+        <b style="color:var(--warn)">注意</b> 有提醒但可发布 ·
+        <b style="color:var(--err)">拦截</b> 文案或素材不符合要求 ·
+        <b style="color:var(--manual)">半自动</b> 无公开接口，将生成草稿并打开创作页。
+      </div>
+    </section>
+  </main>
+
+  <!-- 右栏 -->
+  <aside class="rail-right">
+    <section class="card card-pad">
+      <div class="card-head">
+        <div class="card-title"><span class="line"></span>安全等级</div>
+        <button class="btn mini" data-guide>说明</button>
+      </div>
+      <div class="safety-level"><b id="safetyLevel" class="lv-mid">中</b><span id="safetySub">建议开启加密保险箱</span></div>
+      <div class="check-list" id="checkList"></div>
+    </section>
+
+    <section class="card card-pad">
+      <div class="card-head">
+        <div class="card-title"><span class="line"></span>平台能力</div>
+        <span class="sub">官方口径</span>
+      </div>
+      <div class="cap-list" id="capList"></div>
+      <div class="tagline">“无公开 API”不等于不能做，而是只能走人工确认或存在合规风险。</div>
+    </section>
+
+    <section class="card card-pad">
+      <div class="card-head">
+        <div class="card-title"><span class="line"></span>最近操作</div>
+        <button class="btn mini" id="btnClearAudit">清空</button>
+      </div>
+      <div class="audit-list" id="auditList"></div>
+    </section>
+  </aside>
+</div>
+
+<div class="actionbar">
+  <div class="ab-left">
+    <div class="ab-sum">已选 <b id="abSelected">7</b> 个平台<span class="sep">·</span>素材 <b id="abMedia">0</b><span class="sep">·</span>文案 <b id="abText">未填写</b></div>
+    <div class="switch-wrap">
+      <button class="switch on" id="drySwitch" aria-label="演练模式"></button>
+      <span>演练模式（不真实提交）</span>
+    </div>
+  </div>
+  <div class="ab-right">
+    <button class="btn ghost" id="btnSaveDraft">保存草稿</button>
+    <button class="btn primary publish-btn" id="btnPublish">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+      一键发布
+    </button>
+  </div>
+</div>
+
+<!-- 弹窗容器 -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modalBox">
+    <div class="modal-head">
+      <div><h3 id="modalTitle">标题</h3><p id="modalSub"></p></div>
+      <button class="x-close" id="modalClose">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ============================== 数据层 ============================== */
+const PLATFORMS = [
+  {id:'douyin',name:'抖音',mark:'抖',brand:['#25f4ee','#fe2c55'],api:'semi',apiText:'官方半自动',
+   gate:'「发布内容至抖音」需申请能力；服务端代发仅向政务/媒体等特定主体开放。个人创作者走 H5/客户端分享，由用户在抖音内确认发布。',
+   limit:'视频 ≤ 4GB；单条视频',auth:'OAuth + openTicket',
+   createUrl:'https://creator.douyin.com/creator-micro/content/upload',
+   docs:'https://developer.open-douyin.com/docs/resource/zh-CN/dop/operation-standard/platform-capabilities/useclue'},
+  {id:'bilibili',name:'哔哩哔哩',mark:'B',brand:['#00a1d6','#fb7299'],api:'official',apiText:'官方 API',
+   gate:'开放平台「视频稿件管理」提供服务端投递：预处理 → 分片上传 → 稿件提交。需申请开放平台权限。',
+   limit:'≤ 4GB / ≤ 5 小时；非正式会员 5 稿/日',auth:'OAuth（utoken）',
+   createUrl:'https://member.bilibili.com/platform/upload/video/frame',
+   docs:'https://open.bilibili.com/doc/4/0c532c6a-e6fb-0aff-8021-905ae2409095'},
+  {id:'xiaohongshu',name:'小红书',mark:'红',brand:['#ff2442','#ff6b81'],api:'none',apiText:'无公开发布 API',
+   gate:'开放平台目前以电商/服务市场能力为主，笔记发布没有公开接口。第三方“一键发布”多依赖 Cookie 或浏览器自动化，存在违反平台协议与账号风险。',
+   limit:'图文 ≤ 18 图；标题 ≤ 20 字',auth:'—（手动 / 半自动）',
+   createUrl:'https://creator.xiaohongshu.com/publish/publish',
+   docs:'https://open.xiaohongshu.com/home'},
+  {id:'weibo',name:'微博',mark:'微',brand:['#ff8200','#e6162d'],api:'official',apiText:'官方 API',
+   gate:'创建应用并申请发博权限；测试授权约 30 条/小时，普通授权频次更高。支持 OAuth 2.0。',
+   limit:'正文 140 字；图片 ≤ 9 张',auth:'OAuth 2.0',
+   createUrl:'https://weibo.com',
+   docs:'https://open.weibo.com/wiki/2/statuses/share'},
+  {id:'wechat',name:'微信贴图',mark:'信',brand:['#07c160','#2bd67b'],api:'none',apiText:'无公开发布 API',
+   gate:'视频号/朋友圈未开放内容发布 API；公众号图文可走「素材管理 + 草稿箱」，仍需人工群发。若指微信表情包，只能通过表情开放平台人工投稿。',
+   limit:'公众号草稿；视频号手动',auth:'AppID/Secret（仅草稿）',
+   createUrl:'https://channels.weixin.qq.com/platform/post/create',
+   docs:'https://developers.weixin.qq.com/doc/channels/api/'},
+  {id:'instagram',name:'Instagram',mark:'IG',brand:['#833ab4','#fd1d1d'],api:'official',apiText:'官方 API',
+   gate:'需要 Instagram 专业账号、绑定 Meta 应用并通过审核。发布为“创建容器 → 发布容器”两步，仅媒体帖。',
+   limit:'25 条/24h（保守口径，官方文档另有 100 条表述）',auth:'OAuth 2.0（Graph）',
+   createUrl:'https://www.instagram.com/',
+   docs:'https://developers.facebook.com/docs/instagram-platform/content-publishing'},
+  {id:'x',name:'X / Twitter',mark:'X',brand:['#3a3f4b','#0f1115'],api:'official',apiText:'官方 API',
+   gate:'开发者账号 + 写权限，OAuth 2.0 PKCE。2026 年起按量计费，无免费写额度。',
+   limit:'$0.015/条；含链接 $0.20/条',auth:'OAuth 2.0 PKCE',
+   createUrl:'https://x.com/compose/post',
+   docs:'https://docs.x.com/'}
+];
+
+const LIMITS = {
+  douyin:{title:55,body:1000}, bilibili:{title:80,body:2000}, xiaohongshu:{title:20,body:1000},
+  weibo:{title:0,body:140}, wechat:{title:64,body:1000}, instagram:{title:0,body:2200}, x:{title:0,body:280}
+};
+
+const LS = {
+  accounts:'onecast.accounts.v1', settings:'onecast.settings.v1', audit:'onecast.audit.v1',
+  vault:'onecast.vault.v1', content:'onecast.content.v1', hashes:'onecast.hashes.v1'
+};
+const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10};
+
+const state = {
+  accounts:[], settings:{...DEFAULT_SETTINGS}, audit:[], hashes:[],
+  content:{title:'',body:'',tags:'',visibility:'public',media:[],cover:null,demoMedia:false},
+  overrides:{}, selected:new Set(PLATFORMS.map(p=>p.id)), expanded:new Set(),
+  jobs:{}, vault:null, vaultKey:null, secrets:null, running:false, lastActive:Date.now()
+};
+
+const $ = (s,root=document)=>root.querySelector(s);
+const $$ = (s,root=document)=>[...root.querySelectorAll(s)];
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const escAttr = s => esc(s).replace(/\n/g,'&#10;');
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const todayKey = () => new Date().toDateString();
+
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function fmtSize(n){
+  if(!n) return '0 B';
+  const u=['B','KB','MB','GB']; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++;}
+  return (n>=10||i===0?n.toFixed(0):n.toFixed(1))+' '+u[i];
+}
+function fmtTime(ts){ const d=new Date(ts); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function getPlatform(id){ return PLATFORMS.find(p=>p.id===id); }
+function getAccount(id){ return state.accounts.find(a=>a.pid===id); }
+function platformMark(p){ return `<span class="mark" style="--c1:${p.brand[0]};--c2:${p.brand[1]}">${p.mark}</span>`; }
+function statusText(acc){
+  if(!acc) return '未预填';
+  return {unlinked:'未绑定',pending:'待授权',connected:'已授权',manual:'半自动',expired:'已过期'}[acc.status]||'未绑定';
+}
+
+/* ============================== 本地存储 ============================== */
+function loadLocal(){
+  try{
+    const a = JSON.parse(localStorage.getItem(LS.accounts)||'[]');
+    if(Array.isArray(a)) state.accounts = a;
+    const s = JSON.parse(localStorage.getItem(LS.settings)||'{}');
+    state.settings = Object.assign({},DEFAULT_SETTINGS,s);
+    state.audit = JSON.parse(localStorage.getItem(LS.audit)||'[]');
+    state.hashes = JSON.parse(localStorage.getItem(LS.hashes)||'[]');
+    state.vault = JSON.parse(localStorage.getItem(LS.vault)||'null');
+    const c = JSON.parse(localStorage.getItem(LS.content)||'null');
+    if(c && typeof c==='object'){
+      state.content.title = c.title||'';
+      state.content.body = c.body||'';
+      state.content.tags = c.tags||'';
+      state.content.visibility = c.visibility||'public';
+      state.overrides = c.overrides||{};
+      state.content.demoMedia = !!c.demoMedia;
+      if(state.content.demoMedia){
+        state.content.media=[{id:uid(),name:'示例素材_竖屏.mp4',size:12.4*1024*1024,type:'video/mp4',kind:'video',hash:'demo-sample',url:''}];
+      }
+    }
+  }catch(e){ console.warn('读取本地数据失败',e); }
+  if(!state.accounts.length) seedAccounts(false);
+}
+function persist(key,val){ try{ localStorage.setItem(key,JSON.stringify(val)); }catch(e){ toast('本地存储失败','浏览器空间不足或被禁用','err'); } }
+function persistAccounts(){ persist(LS.accounts,state.accounts); }
+function persistSettings(){ persist(LS.settings,state.settings); }
+function persistContent(){
+  persist(LS.content,{title:state.content.title,body:state.content.body,tags:state.content.tags,
+    visibility:state.content.visibility,overrides:state.overrides,demoMedia:!!state.content.demoMedia});
+}
+function persistAudit(){ persist(LS.audit,state.audit.slice(0,80)); }
+function persistHashes(){ persist(LS.hashes,state.hashes.slice(-200)); }
+
+function seedAccounts(announce){
+  const existing = new Map(state.accounts.map(a=>[a.pid,a]));
+  PLATFORMS.forEach(p=>{
+    if(existing.has(p.id)) return;
+    const preferred = p.api==='none' ? 'manual' : 'oauth';
+    state.accounts.push({pid:p.id,handle:'',auth:preferred,status:'unlinked',expiry:'',note:'',updatedAt:Date.now()});
+  });
+  persistAccounts();
+  if(announce) toast('已预填 7 个账号位','点击左侧平台，填写昵称与授权信息','ok');
+}
+
+/* ============================== 保险箱 ============================== */
+function bufToB64(buf){
+  const bytes=new Uint8Array(buf); let s='';
+  for(let i=0;i<bytes.length;i+=0x8000) s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
+  return btoa(s);
+}
+function b64ToBuf(b64){
+  const bin=atob(b64); const arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return arr.buffer;
+}
+async function deriveKey(pass,saltB64){
+  const base = await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2',salt:b64ToBuf(saltB64),iterations:310000,hash:'SHA-256'},
+    base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function encryptJSON(obj,key){
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(obj)));
+  return {iv:bufToB64(iv),ct:bufToB64(ct)};
+}
+async function decryptJSON(meta,key){
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(b64ToBuf(meta.iv))},key,b64ToBuf(meta.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function persistSecrets(){
+  if(!state.vaultKey) return false;
+  const enc=await encryptJSON(state.secrets,state.vaultKey);
+  state.vault=Object.assign({},state.vault,{iv:enc.iv,ct:enc.ct});
+  persist(LS.vault,state.vault);
+  return true;
+}
+async function createVault(pass){
+  const salt=bufToB64(crypto.getRandomValues(new Uint8Array(16)));
+  const key=await deriveKey(pass,salt);
+  state.vaultKey=key; state.secrets={}; state.vault={ver:1,salt,iv:'',ct:''};
+  await persistSecrets(); state.lastActive=Date.now();
+  toast('保险箱已创建','凭据将使用 AES-GCM 加密后保存在本机','ok');
+}
+async function unlockVault(pass){
+  try{
+    const key=await deriveKey(pass,state.vault.salt);
+    const secrets=await decryptJSON(state.vault,key);
+    state.vaultKey=key; state.secrets=secrets||{}; state.lastActive=Date.now();
+    toast('保险箱已解锁','','ok');
+  }catch(e){ toast('解锁失败','主密码不正确','err'); throw e; }
+}
+function lockVault(silent){
+  state.vaultKey=null; state.secrets=null;
+  if(!silent) toast('保险箱已锁定','内存中的凭据已清除','warn');
+}
+function vaultStatus(){
+  if(!state.vault) return 'unset';
+  return state.vaultKey?'unlocked':'locked';
+}
+
+/* ============================== 渲染：账号 ============================== */
+function renderAccounts(){
+  const wrap=$('#accountList'); if(!wrap) return;
+  wrap.innerHTML='';
+  PLATFORMS.forEach(p=>{
+    const acc=getAccount(p.id);
+    const status=acc?acc.status:'unlinked';
+    const btn=document.createElement('button');
+    btn.className='acct';
+    btn.innerHTML=`${platformMark(p)}
+      <span class="acct-info">
+        <span class="acct-name">${esc(p.name)}</span>
+        <span class="acct-handle">${acc&&acc.handle?esc(acc.handle):'未预填'}</span>
+      </span>
+      <span class="dot ${status}" title="${statusText(acc)}"></span>`;
+    btn.onclick=()=>openAccount(p.id);
+    wrap.appendChild(btn);
+  });
+}
+
+/* ============================== 渲染：能力 / 审计 / 安全 ============================== */
+function renderCap(){
+  const wrap=$('#capList'); if(!wrap) return;
+  wrap.innerHTML=PLATFORMS.map(p=>`
+    <div class="cap-row" title="${escAttr(p.gate)}">
+      ${platformMark(p)}
+      <span class="cap-name">${esc(p.name)}</span>
+      <span class="badge ${p.api}">${esc(p.apiText)}</span>
+    </div>`).join('');
+}
+
+function renderAudit(){
+  const wrap=$('#auditList'); if(!wrap) return;
+  if(!state.audit.length){
+    wrap.innerHTML='<div class="audit-empty">暂无操作记录</div>';
+    return;
+  }
+  const label={success:'成功',manual:'待人工',blocked:'已拦截',error:'失败',dryrun:'演练'};
+  wrap.innerHTML=state.audit.slice(0,7).map(a=>{
+    const p=getPlatform(a.pid);
+    return `<div class="audit-row">
+      <span class="time">${fmtTime(a.ts)}</span>
+      <span class="who">${esc(p?p.name:a.pid)} · ${label[a.result]||a.result}</span>
+      <span class="badge ${a.result==='success'?'official':a.result==='error'||a.result==='blocked'?'none':'semi'}">${label[a.result]||a.result}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderSafety(){
+  const official=PLATFORMS.filter(p=>p.api==='official'||p.api==='semi').length;
+  const noApi=PLATFORMS.filter(p=>p.api==='none').length;
+  const vaultOn=!!state.vault;
+  const items=[
+    {ok:vaultOn,text:vaultOn?`保险箱已${state.vaultKey?'解锁':'锁定'}（AES-GCM）`:'未设置加密保险箱'},
+    {ok:state.settings.dryRun,text:state.settings.dryRun?'演练模式已开启':'演练模式已关闭，将真实提交'},
+    {ok:official>=5,text:`${official} 个平台有官方/半官方通道，${noApi} 个需人工确认`},
+    {ok:true,text:'不采集平台密码，仅保存授权凭据'},
+    {ok:true,text:'频次提示：统计今日发布数；B 站/Instagram 按上限拦截'}
+  ];
+  $('#checkList').innerHTML=items.map(i=>`<div class="check-item"><span class="ci ${i.ok?'':'no'}">${i.ok?'✓':'!'}</span><span>${i.text}</span></div>`).join('');
+  const level=!vaultOn?'低':(state.settings.dryRun?'高':'中');
+  const el=$('#safetyLevel');
+  el.textContent=level;
+  el.className=level==='高'?'lv-high':level==='中'?'lv-mid':'lv-low';
+  $('#safetySub').textContent=!vaultOn?'建议先设置主密码':(state.settings.dryRun?'凭据加密 + 双重确认':'真实发布模式，请逐条核对');
+}
+
+function renderHero(){
+  let ready=0, today=0;
+  PLATFORMS.forEach(p=>{
+    if(state.selected.has(p.id)){
+      const v=validatePlatform(p.id);
+      if(v.ok) ready++;
+    }
+    today+=countToday(p.id);
+  });
+  const official=PLATFORMS.filter(p=>p.api==='official'||p.api==='semi').length;
+  $('#chipSelected').textContent=state.selected.size;
+  $('#chipReady').textContent=ready;
+  $('#chipOfficial').textContent=official;
+  $('#chipToday').textContent=today;
+  $('#abSelected').textContent=state.selected.size;
+  $('#abMedia').textContent=state.content.media.length;
+  $('#abText').textContent=(state.content.title||state.content.body)?'已填写':'未填写';
+}
+
+function renderVaultPill(){
+  const pill=$('#vaultPill'), txt=$('#vaultText');
+  const st=vaultStatus();
+  pill.classList.toggle('ok',st==='unlocked');
+  pill.classList.toggle('warn',st==='unset');
+  txt.textContent=st==='unlocked'?'保险箱已解锁':st==='locked'?'保险箱已锁定':'未设置保险箱';
+}
+
+/* ============================== 素材 ============================== */
+function renderMedia(){
+  const grid=$('#mediaGrid'); if(!grid) return;
+  const media=state.content.media;
+  grid.innerHTML='';
+  media.forEach(m=>{
+    const d=document.createElement('div');
+    d.className='m-item';
+    if(m.kind==='image'&&m.url){
+      d.innerHTML=`<img src="${m.url}" alt="${escAttr(m.name)}"><div class="m-name">${esc(m.name)}</div>`;
+    }else if(m.kind==='image'){
+      d.innerHTML=`<div class="m-video" style="background:linear-gradient(135deg,#243,#132)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div><div class="m-name">${esc(m.name)}</div>`;
+    }else{
+      d.innerHTML=`<div class="m-video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m10 8 6 4-6 4z"/><circle cx="12" cy="12" r="9"/></svg><span>${fmtSize(m.size)}</span></div><div class="m-name">${esc(m.name)}</div>`;
+    }
+    const x=document.createElement('button');
+    x.className='m-x'; x.textContent='×'; x.title='移除';
+    x.onclick=()=>{ state.content.media=state.content.media.filter(i=>i.id!==m.id); state.content.demoMedia=false; clearJobs(); renderMedia(); renderMatrix(); renderHero(); };
+    d.appendChild(x);
+    grid.appendChild(d);
+  });
+  const meta=$('#mediaMeta');
+  if(!media.length){ meta.style.display='none'; return; }
+  meta.style.display='flex';
+  const total=media.reduce((s,m)=>s+m.size,0);
+  const kind=media.every(m=>m.kind==='video')?'视频':media.every(m=>m.kind==='image')?'图片':'混合';
+  meta.innerHTML=`<span>${media.length} 个 · ${fmtSize(total)} · ${kind}</span><span>指纹 <code>${esc(mediaFingerprint().slice(0,16))}</code></span>`;
+
+  const cp=$('#coverPh');
+  if(state.content.cover&&state.content.cover.url){
+    cp.outerHTML=`<img id="coverPh" src="${state.content.cover.url}" alt="封面">`;
+  }else{
+    const img=$('#coverPh');
+    if(img&&img.tagName==='IMG'){ img.outerHTML='<span id="coverPh">封面</span>'; }
+  }
+}
+
+async function fileFingerprint(file){
+  try{
+    const buf=await file.slice(0,2*1024*1024).arrayBuffer();
+    const d=await crypto.subtle.digest('SHA-256',buf);
+    return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,24);
+  }catch(e){ return 'h'+file.size+'-'+file.name.length; }
+}
+
+async function addFiles(files){
+  const list=[...files].filter(f=>f.type.startsWith('image/')||f.type.startsWith('video/'));
+  if(!list.length){ toast('不支持的文件类型','请选择图片或视频','warn'); return; }
+  if(state.content.media.length+list.length>18){ toast('素材过多','最多 18 个文件','warn'); return; }
+  for(const f of list){
+    const kind=f.type.startsWith('video/')?'video':'image';
+    const fp=await fileFingerprint(f);
+    state.content.media.push({id:uid(),name:f.name,size:f.size,type:f.type,kind,hash:fp,url:URL.createObjectURL(f)});
+  }
+  state.content.demoMedia=false;
+  clearJobs(); renderMedia(); renderMatrix(); renderHero();
+}
+
+function addSampleMedia(){
+  state.content.media=[{id:uid(),name:'示例素材_竖屏.mp4',size:12.4*1024*1024,type:'video/mp4',kind:'video',hash:'demo-sample',url:''}];
+  state.content.demoMedia=true; persistContent();
+  clearJobs(); renderMedia(); renderMatrix(); renderHero();
+  toast('已载入示例素材','仅用于演示流程，不会上传','ok');
+}
+
+function setCover(file){
+  if(!file||!file.type.startsWith('image/')) return;
+  state.content.cover={name:file.name,url:URL.createObjectURL(file)};
+  renderMedia();
+}
+
+function mediaFingerprint(){
+  const media=state.content.media;
+  if(!media.length) return 'empty';
+  return media.map(m=>m.hash).join('|');
+}
+
+/* ============================== 校验 ============================== */
+function effective(pid){
+  const o=state.overrides[pid]||{};
+  return {
+    title:o.title!==undefined?o.title:state.content.title,
+    body:o.body!==undefined?o.body:state.content.body,
+    tags:o.tags!==undefined?o.tags:state.content.tags,
+    visibility:o.visibility!==undefined?o.visibility:state.content.visibility,
+    schedule:o.schedule||''
+  };
+}
+
+function validatePlatform(pid){
+  const p=getPlatform(pid), c=effective(pid), lim=LIMITS[pid];
+  const media=state.content.media;
+  const errors=[], warnings=[];
+  const title=(c.title||'').trim(), body=(c.body||'').trim();
+  if(!title&&!body) errors.push('文案为空');
+  if(lim.title&&title.length>lim.title) errors.push('标题超 '+lim.title+' 字');
+  if(body.length>lim.body) errors.push('正文超 '+lim.body+' 字');
+  if(!lim.title&&!body) errors.push('正文为空');
+  const videos=media.filter(m=>m.kind==='video'), imgs=media.filter(m=>m.kind==='image');
+  const hasV=videos.length>0, hasI=imgs.length>0;
+  if(hasV&&hasI) errors.push('图片与视频不能混发');
+  if(pid==='douyin'||pid==='bilibili'){
+    if(!hasV) errors.push('需要视频素材');
+    if(imgs.length) errors.push('仅支持单条视频');
+    if(videos.length>1) errors.push('仅支持 1 个视频');
+  }
+  if(pid==='xiaohongshu'){
+    if(!hasV&&!hasI) errors.push('需要图片或视频');
+    if(videos.length>1) errors.push('视频笔记仅 1 个视频');
+    if(imgs.length>18) errors.push('图片最多 18 张');
+  }
+  if(pid==='weibo'){
+    if(imgs.length>9) errors.push('图片最多 9 张');
+  }
+  if(pid==='instagram'){
+    if(!hasV&&!hasI) errors.push('需要媒体');
+    if(videos.length>1) errors.push('仅 1 个视频');
+    if(imgs.length>10) errors.push('图片最多 10 张');
+  }
+  if(pid==='x'){
+    if(imgs.length>4) errors.push('图片最多 4 张');
+  }
+  const acc=getAccount(pid);
+  const demo=state.settings.mode==='demo';
+  if(p.api!=='none'&&!demo&&(!acc||acc.status==='unlinked'||acc.status==='pending'||acc.status==='expired')){
+    errors.push('账号未授权');
+  }
+  if(p.api==='none') warnings.push('转人工确认');
+  if(pid==='bilibili'&&!state.content.cover) warnings.push('建议上传封面');
+  if(pid==='x'&&/https?:\/\//.test(body)) warnings.push('含链接计费');
+  if(media.some(m=>m.size>4*1024*1024*1024)) errors.push('文件超过 4GB');
+  const cap={bilibili:5,instagram:25}[pid];
+  if(cap&&countToday(pid)>=cap) errors.push('已达今日上限');
+  return {ok:errors.length===0,errors,warnings};
+}
+
+function validChip(v,pid){
+  const job=state.jobs[pid];
+  if(job){
+    const cls=job.state==='running'?'run':job.state==='success'?'ok':job.state==='manual'?'warn':job.state==='blocked'||job.state==='error'?'err':'run';
+    return `<span class="vchip ${cls}" title="${escAttr(job.text||'')}">${esc(job.text||'处理中')}</span>`;
+  }
+  if(!v.ok) return `<span class="vchip err" title="${escAttr(v.errors.join('；'))}">${esc(v.errors[0])}</span>`;
+  if(v.warnings.length) return `<span class="vchip warn" title="${escAttr(v.warnings.join('；'))}">${esc(v.warnings[0])}</span>`;
+  return '<span class="vchip ok">就绪</span>';
+}
+
+function countToday(pid){
+  const k=todayKey();
+  return state.audit.filter(a=>a.pid===pid&&(a.result==='success'||a.result==='manual')&&new Date(a.ts).toDateString()===k).length;
+}
+function isSelectedAll(){ return PLATFORMS.every(p=>state.selected.has(p.id)); }
+function clearJobs(){ state.jobs={}; }
+
+/* ============================== 渲染：平台矩阵 ============================== */
+function renderMatrix(){
+  const wrap=$('#matrix'); if(!wrap) return;
+  wrap.innerHTML='';
+  PLATFORMS.forEach(p=>{
+    const acc=getAccount(p.id);
+    const v=validatePlatform(p.id);
+    const selected=state.selected.has(p.id);
+    const c=effective(p.id);
+    const row=document.createElement('div');
+    row.className='prow';
+    row.innerHTML=`
+      <div class="prow-main">
+        <label class="check"><input type="checkbox" data-select ${selected?'checked':''}></label>
+        <div class="pf">${platformMark(p)}<div><b>${esc(p.name)}</b><span>${esc(p.auth)}</span></div></div>
+        <div class="p-acct">
+          <span class="handle">${acc&&acc.handle?esc(acc.handle):'<span class="muted">未绑定账号</span>'}</span>
+          <em class="st ${acc?acc.status:'unlinked'}">${statusText(acc)}</em>
+        </div>
+        <div class="p-valid" data-valid>${validChip(v,p.id)}</div>
+        <div class="p-count">${countToday(p.id)} 次</div>
+        <div class="p-acts">
+          <button class="btn mini" data-adapt>适配</button>
+          <button class="btn mini" data-open>打开</button>
+        </div>
+      </div>
+      <div class="override ${state.expanded.has(p.id)?'on':''}" data-panel>
+        <div class="two-col">
+          <div class="field"><label>标题 <span>${limTitleText(p.id)}</span></label><input class="inp" data-ov="title" value="${escAttr(c.title)}" placeholder="留空则使用全局标题"></div>
+          <div class="field"><label>可见范围</label>
+            <select class="sel" data-ov="visibility">
+              <option value="public" ${c.visibility==='public'?'selected':''}>公开</option>
+              <option value="friends" ${c.visibility==='friends'?'selected':''}>仅好友 / 关注者</option>
+              <option value="private" ${c.visibility==='private'?'selected':''}>仅自己</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>正文 <span>${esc(limBodyText(p.id))}</span></label><textarea class="ta" data-ov="body" placeholder="留空则使用全局正文">${esc(c.body)}</textarea></div>
+        <div class="two-col">
+          <div class="field"><label>标签</label><input class="inp" data-ov="tags" value="${escAttr(c.tags)}" placeholder="留空则使用全局标签"></div>
+          <div class="field"><label>定时发布（可选）</label><input class="inp" type="datetime-local" data-ov="schedule" value="${escAttr(c.schedule)}"></div>
+        </div>
+      </div>`;
+    wrap.appendChild(row);
+
+    $('[data-select]',row).onchange=e=>{
+      if(e.target.checked) state.selected.add(p.id); else state.selected.delete(p.id);
+      $('#checkAll').checked=isSelectedAll();
+      renderHero();
+    };
+    $('[data-adapt]',row).onclick=()=>{
+      if(state.expanded.has(p.id)) state.expanded.delete(p.id); else state.expanded.add(p.id);
+      renderMatrix();
+    };
+    $('[data-open]',row).onclick=()=>openCreate(p.id);
+    $$('[data-ov]',row).forEach(inp=>{
+      inp.oninput=()=>{
+        state.overrides[p.id]=state.overrides[p.id]||{};
+        state.overrides[p.id][inp.dataset.ov]=inp.value;
+        persistContent(); clearJobs();
+        const nv=validatePlatform(p.id);
+        $('[data-valid]',row).innerHTML=validChip(nv,p.id);
+        renderHero();
+      };
+      inp.onchange=()=>{ clearJobs(); renderMatrix(); };
+    });
+  });
+}
+
+function limTitleText(pid){ const n=LIMITS[pid].title; return n?`≤ ${n} 字`:'无独立标题'; }
+function limBodyText(pid){ return `≤ ${LIMITS[pid].body} 字`; }
+
+/* ============================== 弹窗框架 ============================== */
+let modalScrollY=0;
+function lockPageScroll(){
+  modalScrollY=window.scrollY||0;
+  document.body.style.position='fixed';
+  document.body.style.top='-'+modalScrollY+'px';
+  document.body.style.left='0';
+  document.body.style.right='0';
+  document.body.style.width='100%';
+  document.documentElement.style.overflow='hidden';
+}
+function unlockPageScroll(){
+  document.body.style.position='';
+  document.body.style.top='';
+  document.body.style.left='';
+  document.body.style.right='';
+  document.body.style.width='';
+  document.documentElement.style.overflow='';
+  window.scrollTo(0,modalScrollY);
+}
+function openModal(title,sub,body,foot,wide){
+  $('#modalBox').classList.toggle('wide',!!wide);
+  $('#modalTitle').textContent=title;
+  $('#modalSub').textContent=sub||'';
+  $('#modalBody').innerHTML=body;
+  $('#modalFoot').innerHTML=foot||'';
+  $('#modalBg').classList.add('on');
+  lockPageScroll();
+}
+function closeModal(){
+  $('#modalBg').classList.remove('on');
+  $('#modalBody').innerHTML='';
+  $('#modalFoot').innerHTML='';
+  unlockPageScroll();
+}
+
+/* ============================== 账号弹窗 ============================== */
+function openAccountPicker(){
+  const body=`<div class="gate-box">选择一个平台，填写账号与授权信息。预填不会连接平台，也不会发送任何请求。</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+      ${PLATFORMS.map(p=>`<button class="btn ghost" style="justify-content:flex-start;padding:9px" data-pick="${p.id}">${platformMark(p)}<span style="margin-left:7px">${esc(p.name)}</span></button>`).join('')}
+    </div>`;
+  openModal('选择平台','7 个平台 · 单账号位',body,`<button class="btn ghost" data-cancel>取消</button>`);
+  $$('[data-pick]').forEach(b=>b.onclick=()=>{ closeModal(); openAccount(b.dataset.pick); });
+  $('[data-cancel]').onclick=closeModal;
+}
+
+function openAccount(pid){
+  const p=getPlatform(pid);
+  const acc=getAccount(pid)||{pid,handle:'',auth:p.api==='none'?'manual':'oauth',status:'unlinked',expiry:'',note:''};
+  const locked=!!state.vault&&!state.vaultKey;
+  const noVault=!state.vault;
+  const saved=state.secrets&&state.secrets[pid];
+  const authOpts=p.api==='none'
+    ? [['manual','手动 / 半自动'],['demo','仅演示']]
+    : [['oauth','OAuth 官方授权'],['secret','AppID + Secret'],['manual','手动 / 半自动'],['demo','仅演示']];
+  const body=`
+    <div class="gate-box"><b>${esc(p.name)} · ${esc(p.apiText)}</b><br>${esc(p.gate)}
+      <div class="links"><a href="${p.docs}" target="_blank" rel="noopener">官方文档</a><a href="${p.createUrl}" target="_blank" rel="noopener">创作中心</a></div>
+    </div>
+    <div class="field"><label>账号昵称 / 主页标识</label><input class="inp" id="acHandle" value="${escAttr(acc.handle)}" placeholder="@你的账号"></div>
+    <div class="field"><label>接入方式</label>
+      <div class="radio-row">${authOpts.map(([v,t])=>`<label><input type="radio" name="acAuth" value="${v}" ${acc.auth===v?'checked':''}>${t}</label>`).join('')}</div>
+    </div>
+    ${p.api!=='none'?`
+    <div class="field"><label>Access Token ${locked?'· 已锁定':''}</label>
+      <textarea class="ta" id="acToken" ${locked||noVault?'disabled':''} placeholder="${saved?'已保存，留空表示不修改':'粘贴 OAuth access_token'}"></textarea>
+    </div>
+    <div class="field"><label>Refresh Token（可选）</label>
+      <input class="inp" id="acRefresh" ${locked||noVault?'disabled':''} placeholder="${saved&&saved.refresh?'已保存，留空表示不修改':'用于自动续期'}">
+    </div>`:''}
+    <div class="two-col">
+      <div class="field"><label>授权到期日（可选）</label><input class="inp" type="date" id="acExpiry" value="${escAttr(acc.expiry||'')}"></div>
+      <div class="field"><label>当前状态</label><input class="inp" value="${statusText(acc)}" disabled></div>
+    </div>
+    <div class="field"><label>备注</label><input class="inp" id="acNote" value="${escAttr(acc.note||'')}" placeholder="例如：主号 / 矩阵号"></div>
+    <div class="form-note">${noVault?'尚未设置保险箱：Token 输入已禁用。请先到右上角设置主密码。':locked?'保险箱已锁定：解锁后才能读取或写入 Token。':'Token 仅写入本机加密保险箱，不会发送到本页面以外的地址。'}</div>`;
+  const foot=`
+    ${state.accounts.some(a=>a.pid===pid)?`<button class="btn danger" id="acDelete" style="margin-right:auto">删除</button>`:''}
+    ${noVault?`<button class="btn ghost" id="acVault">设置保险箱</button>`:''}
+    <button class="btn ghost" id="acCancel">取消</button>
+    <button class="btn ghost" id="acTest">测试连接</button>
+    <button class="btn primary" id="acSave">保存</button>`;
+  openModal('账号设置 · '+p.name,p.apiText,body,foot);
+
+  const save=async()=>{
+    const handle=($('#acHandle').value||'').trim();
+    const auth=($('input[name=acAuth]:checked')||{}).value||'oauth';
+    const token=($('#acToken')||{}).value?$('#acToken').value.trim():'';
+    const refresh=($('#acRefresh')||{}).value?$('#acRefresh').value.trim():'';
+    const expiry=($('#acExpiry')||{}).value||'';
+    const note=($('#acNote')||{}).value.trim();
+    if(token&&!state.vaultKey){ toast('无法保存 Token','请先解锁保险箱','err'); return; }
+    if(token){
+      state.secrets[pid]=state.secrets[pid]||{};
+      state.secrets[pid].token=token;
+      if(refresh) state.secrets[pid].refresh=refresh;
+      state.secrets[pid].updatedAt=Date.now();
+      await persistSecrets();
+    }
+    const prev=getAccount(pid);
+    const hasSecret=!!(state.secrets&&state.secrets[pid]&&state.secrets[pid].token)||(locked&&prev&&prev.status==='connected');
+    let status='unlinked';
+    if(handle){
+      if(p.api==='none'||auth==='manual') status='manual';
+      else if(auth==='demo') status='pending';
+      else status=hasSecret?'connected':'pending';
+    }
+    if(expiry&&new Date(expiry+'T23:59:59')<new Date()) status='expired';
+    const rec={pid,handle,auth,status,expiry,note,updatedAt:Date.now()};
+    const idx=state.accounts.findIndex(a=>a.pid===pid);
+    if(idx>=0) state.accounts[idx]=rec; else state.accounts.push(rec);
+    persistAccounts(); closeModal(); renderAll();
+    toast('账号已保存',handle?'状态：'+statusText(rec):'未填写账号','ok');
+  };
+  $('#acSave').onclick=save;
+  $('#acCancel').onclick=closeModal;
+  if($('#acVault')) $('#acVault').onclick=()=>{ closeModal(); openVault(); };
+  $('#acTest').onclick=()=>{
+    if(p.api==='none') toast('该平台无公开发布 API','请使用半自动模式：生成草稿 + 人工确认','warn');
+    else if(!state.vaultKey&&!saved) toast('尚未授权','请先解锁保险箱并填写 Token','warn');
+    else toast('连接正常','已模拟校验授权信息（未发起真实请求）','ok');
+  };
+  if($('#acDelete')) $('#acDelete').onclick=async()=>{
+    if(!confirm('删除该账号及其本地凭据？')) return;
+    state.accounts=state.accounts.filter(a=>a.pid!==pid);
+    if(state.secrets){ delete state.secrets[pid]; await persistSecrets(); }
+    persistAccounts(); closeModal(); renderAll();
+    toast('已删除账号','','warn');
+  };
+}
+
+/* ============================== 保险箱弹窗 ============================== */
+function openVault(){
+  if(state.vaultKey){ lockVault(); renderVaultPill(); renderSafety(); return; }
+  if(!state.vault){
+    const body=`
+      <div class="gate-box">主密码只在本机用于派生 AES-GCM 密钥（PBKDF2 · 310,000 次），<b>不会上传、不会写进本地存储</b>。忘记主密码只能重置保险箱。</div>
+      <div class="field"><label>设置主密码（至少 8 位）</label><div class="pass-wrap"><input class="inp" id="vPass" type="password" placeholder="建议使用独立的长密码"></div></div>
+      <div class="field"><label>再次输入</label><input class="inp" id="vPass2" type="password" placeholder="确认主密码"></div>
+      <div class="form-note">保险箱只加密 Token / Secret。账号昵称、平台、状态等非敏感信息仍以明文保存在本机。</div>`;
+    const foot=`<button class="btn ghost" id="vCancel">取消</button><button class="btn primary" id="vCreate">创建并解锁</button>`;
+    openModal('设置加密保险箱','AES-GCM 256 · 本机加密',body,foot);
+    $('#vCancel').onclick=closeModal;
+    $('#vCreate').onclick=async()=>{
+      const a=$('#vPass').value,b=$('#vPass2').value;
+      if(a.length<8){ toast('密码太短','至少 8 位','err'); return; }
+      if(a!==b){ toast('两次输入不一致','','err'); return; }
+      $('#vCreate').disabled=true;
+      await createVault(a);
+      closeModal(); renderAll();
+    };
+  }else{
+    const body=`
+      <div class="gate-box">输入主密码解锁保险箱，读取本机保存的授权凭据。连续输错不会锁定账号，但请确认环境安全。</div>
+      <div class="field"><label>主密码</label><div class="pass-wrap"><input class="inp" id="vPass" type="password" placeholder="输入主密码"></div></div>
+      <div class="form-note">解锁后 10 分钟内无操作会自动锁定（可在设置中调整）。</div>`;
+    const foot=`<button class="btn ghost" id="vCancel">取消</button><button class="btn primary" id="vUnlock">解锁</button>`;
+    openModal('解锁保险箱','本机凭据 · 不出设备',body,foot);
+    $('#vCancel').onclick=closeModal;
+    $('#vUnlock').onclick=async()=>{
+      const pass=$('#vPass').value;
+      if(!pass){ toast('请输入主密码','','warn'); return; }
+      try{ await unlockVault(pass); closeModal(); renderAll(); }catch(e){}
+    };
+    $('#vPass').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#vUnlock').click(); });
+  }
+}
+
+/* ============================== 设置弹窗 ============================== */
+function openSettings(){
+  const s=state.settings;
+  const body=`
+    <div class="gate-box">本页面是纯前端控制台。<b>演示模式</b>不发起任何网络请求；<b>已连接后端</b>会把发布指令发送到你填写的自建服务地址。</div>
+    <div class="field"><label>后端地址（BFF）</label><input class="inp" id="stApi" value="${escAttr(s.apiBase)}" placeholder="https://your-server.example.com"></div>
+    <div class="inline-hint" style="margin-top:-3px;margin-bottom:10px">后端需实现 <code>POST /api/publish</code>，并把各平台 Token 保存在服务端加密库中。页面不会直接接触平台 Token。</div>
+    <div class="two-col">
+      <div class="field"><label>自动锁定（分钟，0=关闭）</label><input class="inp" id="stLock" type="number" min="0" max="120" value="${Number(s.autoLock)||0}"></div>
+      <div class="field"><label>运行模式</label>
+        <select class="sel" id="stMode">
+          <option value="demo" ${s.mode==='demo'?'selected':''}>演示模式（不发请求）</option>
+          <option value="live" ${s.mode==='live'?'selected':''}>已连接后端</option>
+        </select>
+      </div>
+    </div>
+    <label class="confirm-check" style="margin:4px 0 12px"><input type="checkbox" id="stDry" ${s.dryRun?'checked':''}> 默认开启演练模式（只校验，不提交）</label>
+    <div style="border-top:1px solid var(--line);padding-top:12px">
+      <div style="font-size:10.5px;color:var(--muted);margin-bottom:7px">本地数据（不包含保险箱与 Token）</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button class="btn mini" id="stExport">导出配置</button>
+        <button class="btn mini" id="stImportBtn">导入配置</button>
+        <input type="file" id="stImport" accept="application/json" style="display:none">
+        <button class="btn mini danger" id="stClear">清除本机数据</button>
+      </div>
+    </div>`;
+  const foot=`<button class="btn ghost" id="stCancel">取消</button><button class="btn primary" id="stSave">保存设置</button>`;
+  openModal('设置','本地优先 · 可控可审计',body,foot);
+  $('#stCancel').onclick=closeModal;
+  $('#stSave').onclick=()=>{
+    const api=$('#stApi').value.trim().replace(/\/+$/,'');
+    const mode=$('#stMode').value;
+    if(mode==='live'&&!api){ toast('缺少后端地址','切换真实模式前请填写 BFF 地址','err'); return; }
+    state.settings.apiBase=api;
+    state.settings.mode=mode;
+    state.settings.autoLock=Math.max(0,Math.min(120,Number($('#stLock').value)||0));
+    state.settings.dryRun=$('#stDry').checked;
+    persistSettings(); closeModal(); syncSettingsUI(); renderAll();
+    toast('设置已保存',mode==='live'?'真实模式：请求将发往后端':'演示模式：不会发起请求','ok');
+  };
+  $('#stExport').onclick=exportData;
+  $('#stImportBtn').onclick=()=>$('#stImport').click();
+  $('#stImport').onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    try{
+      const data=JSON.parse(await f.text());
+      if(Array.isArray(data.accounts)) state.accounts=data.accounts;
+      if(data.settings) state.settings=Object.assign({},DEFAULT_SETTINGS,data.settings);
+      if(data.content){
+        state.content.title=data.content.title||'';
+        state.content.body=data.content.body||'';
+        state.content.tags=data.content.tags||'';
+        state.content.visibility=data.content.visibility||'public';
+        state.overrides=data.content.overrides||{};
+      }
+      if(Array.isArray(data.audit)) state.audit=data.audit;
+      if(Array.isArray(data.hashes)) state.hashes=data.hashes;
+      persistAccounts(); persistSettings(); persistContent(); persistAudit(); persistHashes();
+      closeModal(); syncSettingsUI(); renderAll();
+      toast('配置已导入','保险箱与 Token 不会被导入','ok');
+    }catch(err){ toast('导入失败','JSON 格式不正确','err'); }
+  };
+  $('#stClear').onclick=()=>{
+    if(!confirm('清除本机账号、草稿、审计与保险箱？此操作不可恢复。')) return;
+    Object.values(LS).forEach(k=>localStorage.removeItem(k));
+    location.reload();
+  };
+}
+
+function exportData(){
+  const data={
+    exportedAt:new Date().toISOString(),
+    accounts:state.accounts,
+    settings:state.settings,
+    content:{title:state.content.title,body:state.content.body,tags:state.content.tags,
+      visibility:state.content.visibility,overrides:state.overrides},
+    audit:state.audit,
+    hashes:state.hashes
+  };
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='onecast-config-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  toast('已导出配置','不包含 Token 与保险箱','ok');
+}
+
+/* ============================== 接入方案 ============================== */
+function openGuide(){
+  const body=`
+  <div class="guide">
+    <h4>结论：最安全 vs 最方便</h4>
+    <div class="verdict safe"><div><b>最安全 · 官方授权 + 自建后端</b>各平台走 OAuth/开放平台，Token 只存服务端加密库（KMS/密钥库），前端只拿短期会话；无公开接口的平台一律转人工确认。没有密码、没有 Cookie 外流，但接入成本最高。</div></div>
+    <div class="verdict fast"><div><b>最方便 · 第三方聚合 SaaS</b>注册即用，一次绑定多平台。代价是登录态/Cookie 交给第三方，平台改版或风控会直接影响发布，账号风险最高。</div></div>
+    <div class="verdict best"><div><b>推荐 · 本地控制台 + 官方 API 优先 + 半自动兜底</b>就是本页面的模式：能官方 API 的走 API；不能的生成草稿、打开创作中心、人工点发布。方便性略低于全自动，但凭据留在本机/自有后端，风险可控。</div></div>
+
+    <h4>各平台真实能力（2026-10）</h4>
+    <table>
+      <tr><th>平台</th><th>可行方式</th><th>门槛 / 风险</th></tr>
+      <tr><td><b>抖音</b></td><td>H5/客户端分享（用户在抖音内确认）；服务端代发仅特定主体</td><td>能力审核；代发面向政务/媒体等，个人不可用</td></tr>
+      <tr><td><b>B 站</b></td><td>开放平台服务端稿件投递（预处理→分片→提交）</td><td>需申请开放平台权限；有审核期</td></tr>
+      <tr><td><b>小红书</b></td><td>无公开笔记发布 API；只能人工或浏览器辅助</td><td>第三方“一键发布”多靠 Cookie，违反协议与封号风险</td></tr>
+      <tr><td><b>微博</b></td><td>开放 API 发博 / 上传媒体</td><td>应用审核 + 权限；测试授权 30 条/小时</td></tr>
+      <tr><td><b>微信贴图</b></td><td>视频号/朋友圈无发布 API；公众号图文可进草稿箱</td><td>仍需人工群发；表情包只能人工投稿</td></tr>
+      <tr><td><b>Instagram</b></td><td>Graph API 两步容器发布</td><td>专业账号 + Meta 应用审核；25 条/24h（保守）</td></tr>
+      <tr><td><b>X</b></td><td>API v2 发帖 + 媒体上传</td><td>按量计费：$0.015/条，含链接 $0.20/条</td></tr>
+    </table>
+
+    <h4>推荐架构</h4>
+    <div class="code-block">浏览器控制台（本页）
+      │  仅发“发布指令”，不持有平台 Token
+      ▼
+自建 BFF / 发布服务（Node / Go / Python）
+      │  OAuth 回调、Token 加密存储（KMS / Vault）、限频、重试、审计
+      ├── 官方 API：抖音 / B 站 / 微博 / Instagram / X
+      └── 半自动：小红书 / 微信 → 生成文案与素材包，打开创作中心，人工确认</div>
+    <p>后端最小接口：</p>
+    <div class="code-block">POST /api/publish
+{
+  "platform": "bilibili",
+  "account": "@your_account",
+  "content": { "title": "...", "body": "...", "tags": "...", "visibility": "public", "schedule": "" },
+  "media": [{ "name": "a.mp4", "size": 123, "type": "video/mp4" }],
+  "dryRun": false
+}
+→ { "ok": true, "url": "https://...", "message": "已提交审核" }</div>
+    <p>生产环境请把 Token 放在服务端密钥库，前端只保留账号 ID；所有发布动作写审计日志，并对同一素材做指纹去重与频次限制。</p>
+
+    <h4>明确不建议</h4>
+    <ul>
+      <li>在网页里收集平台账号密码，或把 Cookie 上传到第三方服务器。</li>
+      <li>用注入脚本 / 模拟点击绕过平台风控批量发布：可能触发验证码、限流甚至封号。</li>
+      <li>把同一素材原样高频分发到所有平台：容易被判定为机器搬运。</li>
+    </ul>
+
+    <h4>官方依据</h4>
+    <ul>
+      <li><a href="https://developer.open-douyin.com/docs/resource/zh-CN/dop/operation-standard/platform-capabilities/useclue" target="_blank" rel="noopener">抖音 · 发布能力使用规范</a> / <a href="https://developer.open-douyin.com/m/announcement/131" target="_blank" rel="noopener">代替用户发布公告</a></li>
+      <li><a href="https://open.bilibili.com/doc/4/0c532c6a-e6fb-0aff-8021-905ae2409095" target="_blank" rel="noopener">哔哩哔哩开放平台 · 视频稿件投递</a></li>
+      <li><a href="https://open.weibo.com/wiki/2/statuses/share" target="_blank" rel="noopener">微博 API · statuses/share</a></li>
+      <li><a href="https://open.xiaohongshu.com/home" target="_blank" rel="noopener">小红书开放平台（电商/服务市场能力）</a></li>
+      <li><a href="https://developers.weixin.qq.com/doc/channels/api/" target="_blank" rel="noopener">微信视频号 API（无内容发布接口）</a></li>
+      <li><a href="https://developers.facebook.com/docs/instagram-platform/content-publishing" target="_blank" rel="noopener">Instagram · Content Publishing</a></li>
+      <li><a href="https://docs.x.com/" target="_blank" rel="noopener">X API 文档与按量计费</a></li>
+    </ul>
+    <p style="margin-top:10px;color:var(--dim)">能力与费率会随平台政策变化，接入前请以官方文档与控制台审核结果为准。</p>
+  </div>`;
+  openModal('接入方案与依据','最安全、最方便与推荐路径',body,`<button class="btn ghost" data-cancel>关闭</button>`,true);
+  $('[data-cancel]').onclick=closeModal;
+}
+
+/* ============================== 提示 ============================== */
+function toast(title,sub,type){
+  const box=$('#toasts');
+  const el=document.createElement('div');
+  el.className='toast '+(type||'');
+  el.innerHTML=`<div class="t-title">${esc(title)}</div>${sub?`<div class="t-sub">${esc(sub)}</div>`:''}`;
+  box.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .25s'; setTimeout(()=>el.remove(),260); },3200);
+}
+
+/* ============================== 发布 ============================== */
+function openCreate(pid){
+  const p=getPlatform(pid);
+  if(p.api==='none') copyContent(pid);
+  window.open(p.createUrl,'_blank','noopener');
+  if(p.api==='none') toast('已复制文案','请在打开的创作中心粘贴并人工确认','ok');
+}
+
+function copyContent(pid){
+  const c=effective(pid);
+  const text=[c.title,c.body,c.tags].filter(Boolean).join('\n\n');
+  const done=()=>toast('文案已复制','',(getPlatform(pid).api==='none'?'ok':''));
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text,done));
+  }else fallbackCopy(text,done);
+}
+function fallbackCopy(text,cb){
+  const ta=document.createElement('textarea');
+  ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); cb(); }catch(e){ toast('复制失败','请手动选择文案','err'); }
+  ta.remove();
+}
+
+function recentDuplicate(){
+  const fp=mediaFingerprint();
+  if(fp==='empty') return false;
+  return state.hashes.some(h=>h.hash===fp&&Date.now()-h.ts<7*86400000);
+}
+function recordHash(){
+  const fp=mediaFingerprint();
+  if(fp==='empty') return;
+  state.hashes.push({hash:fp,ts:Date.now()});
+  persistHashes();
+}
+
+function openPublishConfirm(){
+  if(state.running) return;
+  const pids=[...state.selected];
+  if(!pids.length){ toast('未选择平台','请至少勾选一个平台','warn'); return; }
+  if(!state.content.media.length&&!(state.content.title||state.content.body)){
+    toast('还没有可发布的内容','请添加素材或填写文案','warn'); return;
+  }
+  const rows=pids.map(pid=>{
+    const p=getPlatform(pid), acc=getAccount(pid), v=validatePlatform(pid);
+    const detail=!v.ok?v.errors[0]:(p.api==='none'?'将生成草稿并转人工确认':(v.warnings[0]||'将调用官方接口'));
+    return {p,acc,v,detail};
+  });
+  const okCount=rows.filter(r=>r.v.ok).length;
+  const dup=recentDuplicate();
+  const dry=state.settings.dryRun;
+  const live=state.settings.mode==='live';
+  const modeLine=dry?'演练模式：只做校验与模拟，不会提交到任何平台。':live?'真实模式：将把发布指令发送到你配置的后端，由后端调用平台接口。':'演示提交：模拟完整流程，不会触达平台。';
+  const body=`
+    <div class="gate-box"><b>${okCount} / ${rows.length} 个平台通过校验</b><br>${modeLine}</div>
+    ${dup?'<div class="warn-box">检测到相同素材指纹在 7 天内发布过，平台可能判定为重复内容。建议修改素材或文案。</div>':''}
+    ${!dry&&live?'<div class="warn-box err">这是真实发布：提交后可能立即对外可见，请确认账号与内容无误。</div>':''}
+    <div class="confirm-list">
+      ${rows.map(r=>`<div class="confirm-row">
+        ${platformMark(r.p)}
+        <span class="cnt"><b>${esc(r.p.name)}${r.acc&&r.acc.handle?' · '+esc(r.acc.handle):''}</b><span>${esc(r.detail)}</span></span>
+        <span class="vchip ${r.v.ok?(r.v.warnings.length?'warn':'ok'):'err'}">${r.v.ok?(r.v.warnings.length?'注意':'就绪'):'跳过'}</span>
+      </div>`).join('')}
+    </div>
+    <label class="confirm-check"><input type="checkbox" id="pubConfirm"> 我确认已获得这些账号的发布授权，内容符合平台规则，并已核对素材与文案。</label>`;
+  const foot=`<button class="btn ghost" id="pubCancel">取消</button>
+    <button class="btn primary" id="pubStart" disabled>${dry?'开始演练':live?'确认发布':'演示发布'}</button>`;
+  openModal(dry?'发布确认 · 演练':'发布确认',rows.length+' 个平台',body,foot);
+  $('#pubCancel').onclick=closeModal;
+  $('#pubConfirm').onchange=e=>{ $('#pubStart').disabled=!e.target.checked||okCount===0; };
+  $('#pubStart').onclick=()=>{ closeModal(); runPublish(pids); };
+}
+
+async function runPublish(pids){
+  state.running=true; state.jobs={}; updatePublishButton();
+  const dry=state.settings.dryRun;
+  let success=0, manual=0, blocked=0, failed=0;
+  for(const pid of pids){
+    const p=getPlatform(pid);
+    const v=validatePlatform(pid);
+    if(!v.ok){
+      state.jobs[pid]={state:'blocked',text:'已拦截：'+v.errors[0]};
+      addAudit(pid,'blocked',v.errors[0]); blocked++;
+      renderMatrix(); await sleep(130); continue;
+    }
+    state.jobs[pid]={state:'running',text:'准备素材'}; renderMatrix();
+    await sleep(240);
+    state.jobs[pid]={state:'running',text:'上传中'}; renderMatrix();
+    await sleep(320);
+    if(dry){
+      state.jobs[pid]={state:'success',text:'演练通过'};
+      addAudit(pid,'dryrun','校验通过');
+      success++;
+    }else if(p.api==='none'){
+      state.jobs[pid]={state:'manual',text:'待人工确认'};
+      addAudit(pid,'manual','已生成草稿');
+      manual++;
+    }else if(state.settings.mode==='live'){
+      state.jobs[pid]={state:'running',text:'提交后端'}; renderMatrix();
+      try{
+        const ctrl=new AbortController();
+        const timer=setTimeout(()=>ctrl.abort(),20000);
+        const res=await fetch(state.settings.apiBase.replace(/\/+$/,'')+'/api/publish',{
+          method:'POST',signal:ctrl.signal,
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            platform:pid,
+            account:(getAccount(pid)||{}).handle||'',
+            content:effective(pid),
+            media:state.content.media.map(m=>({name:m.name,size:m.size,type:m.type})),
+            dryRun:false
+          })
+        });
+        clearTimeout(timer);
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const data=await res.json();
+        if(!data.ok) throw new Error(data.message||'后端返回失败');
+        const isManual=!!data.manual;
+        state.jobs[pid]={state:isManual?'manual':'success',text:isManual?'待人工确认':'已发布'};
+        addAudit(pid,isManual?'manual':'success',data.message||'');
+        if(isManual) manual++; else { success++; recordHash(); }
+      }catch(err){
+        state.jobs[pid]={state:'error',text:'失败：'+(err.name==='AbortError'?'超时':err.message)};
+        addAudit(pid,'error',err.message); failed++;
+      }
+    }else{
+      state.jobs[pid]={state:'running',text:'提交平台'}; renderMatrix();
+      await sleep(420);
+      state.jobs[pid]={state:'success',text:'已发布（模拟）'};
+      addAudit(pid,'success','演示');
+      success++;
+    }
+    renderMatrix(); renderAudit(); renderHero();
+    await sleep(160);
+  }
+  state.running=false; updatePublishButton(); renderHero();
+  const parts=[];
+  if(success) parts.push(success+' 成功');
+  if(manual) parts.push(manual+' 待人工');
+  if(blocked) parts.push(blocked+' 已拦截');
+  if(failed) parts.push(failed+' 失败');
+  toast(dry?'演练完成':'发布流程完成',parts.join(' · ')||'无结果',failed||blocked?'warn':'ok');
+}
+
+function addAudit(pid,result,text){
+  state.audit.unshift({ts:Date.now(),pid,result,text:text||''});
+  if(state.audit.length>80) state.audit.length=80;
+  persistAudit(); renderAudit();
+}
+
+/* ============================== UI 同步 ============================== */
+function syncSettingsUI(){
+  $$('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===state.settings.mode));
+  $('#drySwitch').classList.toggle('on',!!state.settings.dryRun);
+  $('#drySwitch').setAttribute('aria-pressed',state.settings.dryRun?'true':'false');
+  renderVaultPill();
+}
+
+function updatePublishButton(){
+  const btn=$('#btnPublish');
+  btn.disabled=!!state.running;
+  const icon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>`;
+  btn.innerHTML=state.running
+    ? icon+' 发布中…'
+    : icon+' '+(state.settings.dryRun?'演练发布':'一键发布')+' <span class="kbd">⌘↵</span>';
+}
+
+function updateCounters(){
+  const t=$('#titleInput').value, b=$('#bodyInput').value;
+  const tags=$('#tagsInput').value.split(/[,，\s#]+/).filter(Boolean).length;
+  const tc=$('#titleCnt'), bc=$('#bodyCnt'), gc=$('#tagCnt');
+  tc.textContent=t.length+' / 80';
+  tc.classList.toggle('over',t.length>80);
+  bc.textContent=b.length+' / 2200';
+  bc.classList.toggle('over',b.length>2200);
+  gc.textContent=tags+' 个';
+}
+
+let matrixTimer=null;
+function scheduleMatrix(){
+  clearTimeout(matrixTimer);
+  matrixTimer=setTimeout(()=>{ renderMatrix(); renderHero(); },280);
+}
+
+function renderAll(){
+  renderAccounts(); renderCap(); renderAudit(); renderSafety(); renderHero();
+  renderVaultPill(); renderMedia(); renderMatrix(); syncSettingsUI(); updatePublishButton();
+}
+
+/* ============================== 事件绑定 ============================== */
+function bindEvents(){
+  $('#modeSeg').addEventListener('click',e=>{
+    const b=e.target.closest('button[data-mode]'); if(!b) return;
+    const mode=b.dataset.mode;
+    if(mode==='live'&&!state.settings.apiBase){
+      toast('尚未配置后端','请先填写 BFF 地址，再切换真实模式','warn');
+      openSettings(); return;
+    }
+    state.settings.mode=mode; persistSettings(); syncSettingsUI(); renderAll();
+    toast(mode==='live'?'已切换到真实模式':'已切换到演示模式',mode==='live'?'发布指令将发送到后端':'不会发起任何网络请求',mode==='live'?'warn':'ok');
+  });
+
+  $('#vaultPill').onclick=openVault;
+  $('#btnSettings').onclick=openSettings;
+  $('#btnPrefill').onclick=()=>{ seedAccounts(true); renderAll(); };
+  $('#btnAddAccount').onclick=openAccountPicker;
+  $('#btnClearAudit').onclick=()=>{
+    if(!state.audit.length) return;
+    if(!confirm('清空最近操作记录？')) return;
+    state.audit=[]; persistAudit(); renderAudit(); renderHero();
+  };
+  $$('[data-guide]').forEach(b=>b.onclick=openGuide);
+
+  $('#fileInput').onchange=e=>{ addFiles(e.target.files); e.target.value=''; };
+  $('#btnPick').onclick=e=>{ e.preventDefault(); e.stopPropagation(); $('#fileInput').click(); };
+  $('#btnSample').onclick=e=>{ e.preventDefault(); e.stopPropagation(); addSampleMedia(); };
+  const dz=$('#dropzone');
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.remove('drag'); }));
+  dz.addEventListener('drop',e=>{ if(e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+  $('#coverInput').onchange=e=>{ setCover(e.target.files[0]); e.target.value=''; };
+  $('#btnClearCover').onclick=()=>{ state.content.cover=null; renderMedia(); };
+
+  $('#titleInput').oninput=e=>{
+    state.content.title=e.target.value; updateCounters(); persistContent(); clearJobs(); scheduleMatrix();
+  };
+  $('#bodyInput').oninput=e=>{
+    state.content.body=e.target.value; updateCounters(); persistContent(); clearJobs(); scheduleMatrix();
+  };
+  $('#tagsInput').oninput=e=>{
+    state.content.tags=e.target.value; updateCounters(); persistContent(); clearJobs(); scheduleMatrix();
+  };
+  $('#visSelect').onchange=e=>{
+    state.content.visibility=e.target.value; persistContent(); clearJobs(); renderMatrix();
+  };
+
+  $('#checkAll').onchange=e=>{
+    state.selected=e.target.checked?new Set(PLATFORMS.map(p=>p.id)):new Set();
+    renderMatrix(); renderHero();
+  };
+  $('#btnSelectOfficial').onclick=()=>{
+    state.selected=new Set(PLATFORMS.filter(p=>p.api==='official').map(p=>p.id));
+    $('#checkAll').checked=isSelectedAll();
+    renderMatrix(); renderHero();
+  };
+  $('#btnClearSel').onclick=()=>{
+    state.selected=new Set();
+    $('#checkAll').checked=false;
+    renderMatrix(); renderHero();
+  };
+
+  $('#drySwitch').onclick=()=>{
+    state.settings.dryRun=!state.settings.dryRun;
+    persistSettings(); syncSettingsUI(); renderSafety(); updatePublishButton();
+    toast(state.settings.dryRun?'演练模式已开启':'演练模式已关闭',state.settings.dryRun?'不会真实提交':'提交前会二次确认',state.settings.dryRun?'ok':'warn');
+  };
+  $('#btnPublish').onclick=openPublishConfirm;
+  $('#btnSaveDraft').onclick=()=>{
+    persistContent(); persistAccounts();
+    toast('草稿已保存','文案与平台适配已写入本机','ok');
+  };
+
+  $('#modalClose').onclick=closeModal;
+  $('#modalBg').addEventListener('click',e=>{ if(e.target===$('#modalBg')) closeModal(); });
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape') closeModal();
+    if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); if(!state.running) openPublishConfirm(); }
+  });
+
+  ['pointerdown','keydown','input'].forEach(ev=>document.addEventListener(ev,()=>{ state.lastActive=Date.now(); },{passive:true}));
+
+  setInterval(()=>{
+    if(!state.vaultKey) return;
+    const min=Number(state.settings.autoLock)||0;
+    if(min<=0) return;
+    if(Date.now()-state.lastActive>min*60000){
+      lockVault(true);
+      renderAll();
+      toast('保险箱已自动锁定','长时间未操作，凭据已从内存清除','warn');
+    }
+  },15000);
+}
+
+/* ============================== 初始化 ============================== */
+function init(){
+  loadLocal();
+  seedAccounts(false);
+  $('#titleInput').value=state.content.title||'';
+  $('#bodyInput').value=state.content.body||'';
+  $('#tagsInput').value=state.content.tags||'';
+  $('#visSelect').value=state.content.visibility||'public';
+  $('#checkAll').checked=isSelectedAll();
+  updateCounters();
+  bindEvents();
+  syncSettingsUI();
+  renderAll();
+  if(!state.vault){
+    setTimeout(()=>toast('建议先设置加密保险箱','右上角“未设置保险箱” → 设置主密码','warn'),900);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
