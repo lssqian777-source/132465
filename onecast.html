@@ -471,7 +471,7 @@ a:hover{text-decoration:underline}
         <div class="dz-t">拖入图片或视频</div>
         <div class="dz-s">文件只在本机预览，不上传服务器</div>
         <div class="dz-actions">
-          <button class="btn mini accent" type="button" id="btnSample">使用示例素材</button>
+          <button class="btn mini accent" type="button" id="btnSample">使用示例图文</button>
           <button class="btn mini" type="button" id="btnPick">选择文件</button>
         </div>
       </div>
@@ -527,6 +527,7 @@ a:hover{text-decoration:underline}
       <div class="matrix-toolbar">
         <label class="select-all"><input type="checkbox" id="checkAll"> 全选</label>
         <div class="toolbar-actions">
+          <button class="btn mini" id="btnSelectImage">仅选图文平台</button>
           <button class="btn mini" id="btnSelectOfficial">仅选官方 API</button>
           <button class="btn mini" id="btnClearSel">清空选择</button>
         </div>
@@ -541,7 +542,8 @@ a:hover{text-decoration:underline}
         状态含义：<b style="color:var(--ok)">就绪</b> 可直接提交 ·
         <b style="color:var(--warn)">注意</b> 有提醒但可发布 ·
         <b style="color:var(--err)">拦截</b> 文案或素材不符合要求 ·
-        <b style="color:var(--manual)">半自动</b> 无公开接口，将生成草稿并打开创作页。
+        <b style="color:var(--manual)">半自动</b> 无公开接口，将生成草稿并打开创作页。<br>
+        图文支持：抖音 / 小红书 / 微博 / 微信贴图 / Instagram / X；B 站视频投稿仅支持视频，图文请走专栏或动态。
       </div>
     </section>
   </main>
@@ -611,13 +613,13 @@ a:hover{text-decoration:underline}
 /* ============================== 数据层 ============================== */
 const PLATFORMS = [
   {id:'douyin',name:'抖音',mark:'抖',brand:['#25f4ee','#fe2c55'],api:'semi',apiText:'官方半自动',
-   gate:'「发布内容至抖音」需申请能力；服务端代发仅向政务/媒体等特定主体开放。个人创作者走 H5/客户端分享，由用户在抖音内确认发布。',
-   limit:'视频 ≤ 4GB；单条视频',auth:'OAuth + openTicket',
+   gate:'「发布内容至抖音」需申请能力；服务端代发仅向政务/媒体等特定主体开放。个人创作者走 H5/客户端分享，由用户在抖音内确认发布。图文与视频均可。',
+   limit:'图文 ≤ 35 图；视频 ≤ 4GB / 单条',auth:'OAuth + openTicket',
    createUrl:'https://creator.douyin.com/creator-micro/content/upload',
    docs:'https://developer.open-douyin.com/docs/resource/zh-CN/dop/operation-standard/platform-capabilities/useclue'},
   {id:'bilibili',name:'哔哩哔哩',mark:'B',brand:['#00a1d6','#fb7299'],api:'official',apiText:'官方 API',
-   gate:'开放平台「视频稿件管理」提供服务端投递：预处理 → 分片上传 → 稿件提交。需申请开放平台权限。',
-   limit:'≤ 4GB / ≤ 5 小时；非正式会员 5 稿/日',auth:'OAuth（utoken）',
+   gate:'开放平台「视频稿件管理」仅支持视频稿件：预处理 → 分片上传 → 稿件提交。图文请走专栏/动态。需申请开放平台权限。',
+   limit:'仅视频；≤ 4GB / ≤ 5 小时；非正式会员 5 稿/日',auth:'OAuth（utoken）',
    createUrl:'https://member.bilibili.com/platform/upload/video/frame',
    docs:'https://open.bilibili.com/doc/4/0c532c6a-e6fb-0aff-8021-905ae2409095'},
   {id:'xiaohongshu',name:'小红书',mark:'红',brand:['#ff2442','#ff6b81'],api:'none',apiText:'无公开发布 API',
@@ -706,7 +708,7 @@ function loadLocal(){
       state.overrides = c.overrides||{};
       state.content.demoMedia = !!c.demoMedia;
       if(state.content.demoMedia){
-        state.content.media=[{id:uid(),name:'示例素材_竖屏.mp4',size:12.4*1024*1024,type:'video/mp4',kind:'video',hash:'demo-sample',url:''}];
+        state.content.media=sampleMediaSet();
       }
     }
   }catch(e){ console.warn('读取本地数据失败',e); }
@@ -944,11 +946,22 @@ async function addFiles(files){
   clearJobs(); renderMedia(); renderMatrix(); renderHero();
 }
 
+function sampleImage(n){
+  const hue=[258,190,330][n-1];
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,55%)"/><stop offset="1" stop-color="hsl(${hue+40},70%,35%)"/></linearGradient></defs><rect width="900" height="1200" fill="url(#g)"/><rect x="60" y="60" width="780" height="1080" rx="28" fill="rgba(0,0,0,.18)" stroke="rgba(255,255,255,.35)"/><text x="450" y="560" text-anchor="middle" font-family="sans-serif" font-size="64" fill="#fff" font-weight="700">示例图文 ${n}</text><text x="450" y="650" text-anchor="middle" font-family="sans-serif" font-size="28" fill="rgba(255,255,255,.8)">OneCast 示例素材</text></svg>`;
+  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+}
+function sampleMediaSet(){
+  return [1,2,3].map(n=>({
+    id:uid(),name:`示例图文_${n}.svg`,size:180*1024,type:'image/svg+xml',
+    kind:'image',hash:'demo-image-'+n,url:sampleImage(n)
+  }));
+}
 function addSampleMedia(){
-  state.content.media=[{id:uid(),name:'示例素材_竖屏.mp4',size:12.4*1024*1024,type:'video/mp4',kind:'video',hash:'demo-sample',url:''}];
+  state.content.media=sampleMediaSet();
   state.content.demoMedia=true; persistContent();
   clearJobs(); renderMedia(); renderMatrix(); renderHero();
-  toast('已载入示例素材','仅用于演示流程，不会上传','ok');
+  toast('已载入示例图文','3 张图片，仅用于演示流程，不会上传','ok');
 }
 
 function setCover(file){
@@ -987,9 +1000,14 @@ function validatePlatform(pid){
   const videos=media.filter(m=>m.kind==='video'), imgs=media.filter(m=>m.kind==='image');
   const hasV=videos.length>0, hasI=imgs.length>0;
   if(hasV&&hasI) errors.push('图片与视频不能混发');
-  if(pid==='douyin'||pid==='bilibili'){
-    if(!hasV) errors.push('需要视频素材');
-    if(imgs.length) errors.push('仅支持单条视频');
+  if(pid==='douyin'){
+    if(!hasV&&!hasI) errors.push('需要图片或视频');
+    if(videos.length>1) errors.push('仅支持 1 个视频');
+    if(hasI&&imgs.length>35) errors.push('图文最多 35 张');
+  }
+  if(pid==='bilibili'){
+    if(!hasV) errors.push('B 站视频投稿需要视频');
+    if(imgs.length) errors.push('图文请走专栏/动态');
     if(videos.length>1) errors.push('仅支持 1 个视频');
   }
   if(pid==='xiaohongshu'){
@@ -1387,8 +1405,8 @@ function openGuide(){
     <h4>各平台真实能力（2026-10）</h4>
     <table>
       <tr><th>平台</th><th>可行方式</th><th>门槛 / 风险</th></tr>
-      <tr><td><b>抖音</b></td><td>H5/客户端分享（用户在抖音内确认）；服务端代发仅特定主体</td><td>能力审核；代发面向政务/媒体等，个人不可用</td></tr>
-      <tr><td><b>B 站</b></td><td>开放平台服务端稿件投递（预处理→分片→提交）</td><td>需申请开放平台权限；有审核期</td></tr>
+      <tr><td><b>抖音</b></td><td>图文或视频；H5/客户端分享由用户在抖音内确认；服务端代发仅特定主体</td><td>能力审核；代发面向政务/媒体等，个人不可用</td></tr>
+      <tr><td><b>B 站</b></td><td>视频稿件投递（预处理→分片→提交）；图文走专栏/动态</td><td>仅视频；需申请开放平台权限，有审核期</td></tr>
       <tr><td><b>小红书</b></td><td>无公开笔记发布 API；只能人工或浏览器辅助</td><td>第三方“一键发布”多靠 Cookie，违反协议与封号风险</td></tr>
       <tr><td><b>微博</b></td><td>开放 API 发博 / 上传媒体</td><td>应用审核 + 权限；测试授权 30 条/小时</td></tr>
       <tr><td><b>微信贴图</b></td><td>视频号/朋友圈无发布 API；公众号图文可进草稿箱</td><td>仍需人工群发；表情包只能人工投稿</td></tr>
@@ -1777,6 +1795,12 @@ function bindEvents(){
   $('#checkAll').onchange=e=>{
     state.selected=e.target.checked?new Set(PLATFORMS.map(p=>p.id)):new Set();
     renderMatrix(); renderHero();
+  };
+  $('#btnSelectImage').onclick=()=>{
+    state.selected=new Set(PLATFORMS.filter(p=>p.id!=='bilibili').map(p=>p.id));
+    $('#checkAll').checked=isSelectedAll();
+    renderMatrix(); renderHero();
+    toast('已选图文平台','B 站视频投稿需要视频，已排除','ok');
   };
   $('#btnSelectOfficial').onclick=()=>{
     state.selected=new Set(PLATFORMS.filter(p=>p.api==='official').map(p=>p.id));
