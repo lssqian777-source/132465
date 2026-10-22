@@ -303,6 +303,16 @@ a:hover{text-decoration:underline}
 .confirm-row .cnt{flex:1;min-width:0}
 .confirm-row .cnt b{display:block;font-size:11px;color:var(--txt);font-weight:600}
 .confirm-row .cnt span{font-size:9.5px;color:var(--dim);display:block}
+.pack-list{display:flex;flex-direction:column;gap:6px;margin:10px 0 12px}
+.pack-row{display:flex;align-items:flex-start;gap:8px;padding:8px 9px;border-radius:7px;background:var(--panel2);
+  border:1px solid var(--line);font-size:10.5px;color:var(--muted)}
+.pack-row .mark{width:20px;height:20px;border-radius:5px;font-size:8px;margin-top:1px}
+.pack-info{flex:1;min-width:0}
+.pack-info b{display:block;font-size:11px;color:var(--txt);font-weight:600}
+.pack-info span{font-size:9.5px;color:var(--dim);display:block;margin-top:3px;line-height:1.55;
+  max-height:30px;overflow:hidden;white-space:pre-wrap;word-break:break-all}
+.pack-acts{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:150px;flex-shrink:0}
+.pack-media{font-size:9.5px;color:var(--dim);line-height:1.8;margin-top:6px;word-break:break-all}
 .confirm-check{display:flex;align-items:flex-start;gap:8px;font-size:10.5px;color:var(--muted);line-height:1.6;cursor:pointer;user-select:none}
 .confirm-check input{accent-color:var(--accent);width:14px;height:14px;margin-top:1px;flex-shrink:0}
 .warn-box{padding:9px 11px;border-radius:8px;background:rgba(245,185,66,.06);border:1px solid rgba(245,185,66,.22);
@@ -433,8 +443,9 @@ a:hover{text-decoration:underline}
     <div class="hero">
       <div>
         <h1>一键分发控制台</h1>
-        <p>一份素材，多平台适配。官方接口优先，无公开接口的平台自动生成草稿并转人工确认。</p>
+        <p>一份素材，多平台适配。默认零成本：不调用付费 API，生成发布包后由平台原生定时发布。</p>
         <div class="hero-chips">
+          <span class="chip" id="freeChip"><span class="dot"></span>零成本 · 不调 API</span>
           <span class="chip"><span class="dot"></span>已选 <b id="chipSelected">7</b> 个平台</span>
           <span class="chip">通过校验 <b id="chipReady">0</b></span>
           <span class="chip">官方/半官方 <b id="chipOfficial">0</b></span>
@@ -504,7 +515,7 @@ a:hover{text-decoration:underline}
           </select>
         </div>
       </div>
-      <div class="inline-hint">标签用空格或逗号分隔。正文中的链接在 X 上会产生额外费用（含链接帖 $0.20/条）。</div>
+      <div class="inline-hint">标签用空格或逗号分隔。零成本模式不调用 X API，不产生费用；仅在关闭零成本模式并真实调用 API 时，含链接帖按 $0.20/条计费。</div>
     </section>
 
     <!-- 3 平台 -->
@@ -569,15 +580,15 @@ a:hover{text-decoration:underline}
   <div class="ab-left">
     <div class="ab-sum">已选 <b id="abSelected">7</b> 个平台<span class="sep">·</span>素材 <b id="abMedia">0</b><span class="sep">·</span>文案 <b id="abText">未填写</b></div>
     <div class="switch-wrap">
-      <button class="switch on" id="drySwitch" aria-label="演练模式"></button>
-      <span>演练模式（不真实提交）</span>
+      <button class="switch on" id="freeSwitch" aria-label="零成本模式"></button>
+      <span>零成本模式（不调用付费 API）</span>
     </div>
   </div>
   <div class="ab-right">
     <button class="btn ghost" id="btnSaveDraft">保存草稿</button>
     <button class="btn primary publish-btn" id="btnPublish">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
-      一键发布
+      生成发布包
     </button>
   </div>
 </div>
@@ -645,7 +656,7 @@ const LS = {
   accounts:'onecast.accounts.v1', settings:'onecast.settings.v1', audit:'onecast.audit.v1',
   vault:'onecast.vault.v1', content:'onecast.content.v1', hashes:'onecast.hashes.v1'
 };
-const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10};
+const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10,freeMode:true};
 
 const state = {
   accounts:[], settings:{...DEFAULT_SETTINGS}, audit:[], hashes:[],
@@ -816,7 +827,7 @@ function renderAudit(){
     wrap.innerHTML='<div class="audit-empty">暂无操作记录</div>';
     return;
   }
-  const label={success:'成功',manual:'待人工',blocked:'已拦截',error:'失败',dryrun:'演练'};
+  const label={success:'成功',manual:'待人工',blocked:'已拦截',error:'失败',dryrun:'演练',pack:'已生成'};
   wrap.innerHTML=state.audit.slice(0,7).map(a=>{
     const p=getPlatform(a.pid);
     return `<div class="audit-row">
@@ -831,19 +842,20 @@ function renderSafety(){
   const official=PLATFORMS.filter(p=>p.api==='official'||p.api==='semi').length;
   const noApi=PLATFORMS.filter(p=>p.api==='none').length;
   const vaultOn=!!state.vault;
+  const free=!!state.settings.freeMode;
   const items=[
     {ok:vaultOn,text:vaultOn?`保险箱已${state.vaultKey?'解锁':'锁定'}（AES-GCM）`:'未设置加密保险箱'},
-    {ok:state.settings.dryRun,text:state.settings.dryRun?'演练模式已开启':'演练模式已关闭，将真实提交'},
+    free?{ok:true,text:'零成本模式：不调用平台 API，不产生费用'}:{ok:state.settings.dryRun,text:state.settings.dryRun?'演练模式已开启':'演练模式已关闭，将真实提交'},
     {ok:official>=5,text:`${official} 个平台有官方/半官方通道，${noApi} 个需人工确认`},
     {ok:true,text:'不采集平台密码，仅保存授权凭据'},
-    {ok:true,text:'频次提示：统计今日发布数；B 站/Instagram 按上限拦截'}
+    {ok:true,text:free?'发布包模式：素材与文案由你逐平台确认':'频次提示：统计今日发布数；B 站/Instagram 按上限拦截'}
   ];
   $('#checkList').innerHTML=items.map(i=>`<div class="check-item"><span class="ci ${i.ok?'':'no'}">${i.ok?'✓':'!'}</span><span>${i.text}</span></div>`).join('');
-  const level=!vaultOn?'低':(state.settings.dryRun?'高':'中');
+  const level=!vaultOn?'低':(free||state.settings.dryRun?'高':'中');
   const el=$('#safetyLevel');
   el.textContent=level;
   el.className=level==='高'?'lv-high':level==='中'?'lv-mid':'lv-low';
-  $('#safetySub').textContent=!vaultOn?'建议先设置主密码':(state.settings.dryRun?'凭据加密 + 双重确认':'真实发布模式，请逐条核对');
+  $('#safetySub').textContent=!vaultOn?'建议先设置主密码':(free?'零成本 + 凭据本地加密':state.settings.dryRun?'凭据加密 + 双重确认':'真实发布模式，请逐条核对');
 }
 
 function renderHero(){
@@ -860,6 +872,7 @@ function renderHero(){
   $('#chipReady').textContent=ready;
   $('#chipOfficial').textContent=official;
   $('#chipToday').textContent=today;
+  const fc=$('#freeChip'); if(fc) fc.style.display=state.settings.freeMode?'':'none';
   $('#abSelected').textContent=state.selected.size;
   $('#abMedia').textContent=state.content.media.length;
   $('#abText').textContent=(state.content.title||state.content.body)?'已填写':'未填写';
@@ -997,12 +1010,13 @@ function validatePlatform(pid){
   }
   const acc=getAccount(pid);
   const demo=state.settings.mode==='demo';
-  if(p.api!=='none'&&!demo&&(!acc||acc.status==='unlinked'||acc.status==='pending'||acc.status==='expired')){
+  const free=!!state.settings.freeMode;
+  if(!free&&p.api!=='none'&&!demo&&(!acc||acc.status==='unlinked'||acc.status==='pending'||acc.status==='expired')){
     errors.push('账号未授权');
   }
   if(p.api==='none') warnings.push('转人工确认');
   if(pid==='bilibili'&&!state.content.cover) warnings.push('建议上传封面');
-  if(pid==='x'&&/https?:\/\//.test(body)) warnings.push('含链接计费');
+  if(!free&&pid==='x'&&/https?:\/\//.test(body)) warnings.push('含链接计费');
   if(media.some(m=>m.size>4*1024*1024*1024)) errors.push('文件超过 4GB');
   const cap={bilibili:5,instagram:25}[pid];
   if(cap&&countToday(pid)>=cap) errors.push('已达今日上限');
@@ -1273,6 +1287,8 @@ function openSettings(){
   const s=state.settings;
   const body=`
     <div class="gate-box">本页面是纯前端控制台。<b>演示模式</b>不发起任何网络请求；<b>已连接后端</b>会把发布指令发送到你填写的自建服务地址。</div>
+    <label class="confirm-check" style="margin:2px 0 7px"><input type="checkbox" id="stFree" ${s.freeMode?'checked':''}> 零成本模式：不调用任何平台 API，只生成发布包</label>
+    <div class="inline-hint" style="margin:0 0 11px">开启后 X 等按量计费接口不会被调用；各平台改为复制文案 + 打开创作中心 + 平台原生定时。<b>零成本模式优先于下面的运行模式。</b></div>
     <div class="field"><label>后端地址（BFF）</label><input class="inp" id="stApi" value="${escAttr(s.apiBase)}" placeholder="https://your-server.example.com"></div>
     <div class="inline-hint" style="margin-top:-3px;margin-bottom:10px">后端需实现 <code>POST /api/publish</code>，并把各平台 Token 保存在服务端加密库中。页面不会直接接触平台 Token。</div>
     <div class="two-col">
@@ -1300,13 +1316,15 @@ function openSettings(){
   $('#stSave').onclick=()=>{
     const api=$('#stApi').value.trim().replace(/\/+$/,'');
     const mode=$('#stMode').value;
-    if(mode==='live'&&!api){ toast('缺少后端地址','切换真实模式前请填写 BFF 地址','err'); return; }
+    const free=$('#stFree').checked;
+    if(mode==='live'&&!api&&!free){ toast('缺少后端地址','切换真实模式前请填写 BFF 地址','err'); return; }
     state.settings.apiBase=api;
     state.settings.mode=mode;
     state.settings.autoLock=Math.max(0,Math.min(120,Number($('#stLock').value)||0));
     state.settings.dryRun=$('#stDry').checked;
+    state.settings.freeMode=free;
     persistSettings(); closeModal(); syncSettingsUI(); renderAll();
-    toast('设置已保存',mode==='live'?'真实模式：请求将发往后端':'演示模式：不会发起请求','ok');
+    toast('设置已保存',state.settings.freeMode?'零成本模式：不会调用平台 API':mode==='live'?'真实模式：请求将发往后端':'演示模式：不会发起请求','ok');
   };
   $('#stExport').onclick=exportData;
   $('#stImportBtn').onclick=()=>$('#stImport').click();
@@ -1364,6 +1382,7 @@ function openGuide(){
     <div class="verdict safe"><div><b>最安全 · 官方授权 + 自建后端</b>各平台走 OAuth/开放平台，Token 只存服务端加密库（KMS/密钥库），前端只拿短期会话；无公开接口的平台一律转人工确认。没有密码、没有 Cookie 外流，但接入成本最高。</div></div>
     <div class="verdict fast"><div><b>最方便 · 第三方聚合 SaaS</b>注册即用，一次绑定多平台。代价是登录态/Cookie 交给第三方，平台改版或风控会直接影响发布，账号风险最高。</div></div>
     <div class="verdict best"><div><b>推荐 · 本地控制台 + 官方 API 优先 + 半自动兜底</b>就是本页面的模式：能官方 API 的走 API；不能的生成草稿、打开创作中心、人工点发布。方便性略低于全自动，但凭据留在本机/自有后端，风险可控。</div></div>
+    <div class="verdict best"><div><b>完全免费 · 发布包 + 平台原生定时</b>本页默认开启零成本模式：不调用任何平台 API（尤其不调用按量计费的 X API），只生成逐平台文案、创作中心入口和素材清单；发布与定时都在平台内完成。0 元，但需要人工确认。</div></div>
 
     <h4>各平台真实能力（2026-10）</h4>
     <table>
@@ -1374,10 +1393,20 @@ function openGuide(){
       <tr><td><b>微博</b></td><td>开放 API 发博 / 上传媒体</td><td>应用审核 + 权限；测试授权 30 条/小时</td></tr>
       <tr><td><b>微信贴图</b></td><td>视频号/朋友圈无发布 API；公众号图文可进草稿箱</td><td>仍需人工群发；表情包只能人工投稿</td></tr>
       <tr><td><b>Instagram</b></td><td>Graph API 两步容器发布</td><td>专业账号 + Meta 应用审核；25 条/24h（保守）</td></tr>
-      <tr><td><b>X</b></td><td>API v2 发帖 + 媒体上传</td><td>按量计费：$0.015/条，含链接 $0.20/条</td></tr>
+      <tr><td><b>X</b></td><td>网页版/客户端手动或定时发布可 0 元；API v2 发帖需付费</td><td>API 按量计费：$0.015/条，含链接 $0.20/条；零成本模式不调用 API</td></tr>
     </table>
 
-    <h4>推荐架构</h4>
+    <h4>零成本路径（默认）</h4>
+    <div class="code-block">本页填写素材 + 文案
+      │  逐平台“适配”标题/正文/标签
+      ▼
+生成发布包（不调用 API、不上传素材）
+      │  复制文案 / 打开创作中心
+      ▼
+平台内手动选择素材 → 使用平台自带“定时发布” → 确认</div>
+    <p>这条路径没有任何接口费用，也不需要后端；唯一成本是逐平台确认的时间。小红书、微信贴图本来就没有公开发布接口，手动是唯一合规方式。</p>
+
+    <h4>推荐架构（需要全自动时）</h4>
     <div class="code-block">浏览器控制台（本页）
       │  仅发“发布指令”，不持有平台 Token
       ▼
@@ -1433,9 +1462,10 @@ function toast(title,sub,type){
 /* ============================== 发布 ============================== */
 function openCreate(pid){
   const p=getPlatform(pid);
-  if(p.api==='none') copyContent(pid);
+  const free=!!state.settings.freeMode;
+  if(free||p.api==='none') copyContent(pid);
   window.open(p.createUrl,'_blank','noopener');
-  if(p.api==='none') toast('已复制文案','请在打开的创作中心粘贴并人工确认','ok');
+  if(free||p.api==='none') toast('已复制文案','请在打开的创作中心粘贴素材与文案并人工确认','ok');
 }
 
 function copyContent(pid){
@@ -1473,6 +1503,7 @@ function openPublishConfirm(){
   if(!state.content.media.length&&!(state.content.title||state.content.body)){
     toast('还没有可发布的内容','请添加素材或填写文案','warn'); return;
   }
+  if(state.settings.freeMode){ openFreeConfirm(pids); return; }
   const rows=pids.map(pid=>{
     const p=getPlatform(pid), acc=getAccount(pid), v=validatePlatform(pid);
     const detail=!v.ok?v.errors[0]:(p.api==='none'?'将生成草稿并转人工确认':(v.warnings[0]||'将调用官方接口'));
@@ -1501,6 +1532,79 @@ function openPublishConfirm(){
   $('#pubCancel').onclick=closeModal;
   $('#pubConfirm').onchange=e=>{ $('#pubStart').disabled=!e.target.checked||okCount===0; };
   $('#pubStart').onclick=()=>{ closeModal(); runPublish(pids); };
+}
+
+/* 零成本：不调用任何平台 API，生成可逐平台执行的发布包 */
+function openFreeConfirm(pids){
+  const rows=pids.map(pid=>{
+    const p=getPlatform(pid), acc=getAccount(pid), v=validatePlatform(pid);
+    const detail=!v.ok?v.errors[0]:(v.warnings[0]||'将生成复制文案 + 创作中心入口');
+    return {p,acc,v,detail};
+  });
+  const okCount=rows.filter(r=>r.v.ok).length;
+  const body=`
+    <div class="gate-box"><b>零成本发布包 · ${okCount} / ${rows.length} 个平台可生成</b><br>不调用任何平台 API，不产生费用。本页会准备各平台文案与创作中心入口，发布动作由你在平台内确认。</div>
+    ${okCount===0?'<div class="warn-box err">选中的平台都没有通过校验，请先补充素材或文案。</div>':''}
+    <div class="confirm-list">
+      ${rows.map(r=>`<div class="confirm-row">
+        ${platformMark(r.p)}
+        <span class="cnt"><b>${esc(r.p.name)}${r.acc&&r.acc.handle?' · '+esc(r.acc.handle):''}</b><span>${esc(r.detail)}</span></span>
+        <span class="vchip ${r.v.ok?(r.v.warnings.length?'warn':'ok'):'err'}">${r.v.ok?(r.v.warnings.length?'注意':'就绪'):'跳过'}</span>
+      </div>`).join('')}
+    </div>
+    <div class="warn-box">发布包只包含文案、平台入口和素材清单，不会自动上传文件，也不会自动点击发布。可直接使用各平台自带的定时发布。</div>
+    <label class="confirm-check"><input type="checkbox" id="freeConfirm"> 我了解：发布需要我在各平台手动确认，本操作不会产生 API 费用。</label>`;
+  const foot=`<button class="btn ghost" id="freeCancel">取消</button>
+    <button class="btn primary" id="freeStart" disabled>生成发布包</button>`;
+  openModal('免费发布清单','零 API 费用 · 逐平台人工确认',body,foot);
+  $('#freeCancel').onclick=closeModal;
+  $('#freeConfirm').onchange=e=>{ $('#freeStart').disabled=!e.target.checked||okCount===0; };
+  $('#freeStart').onclick=()=>{ closeModal(); runFreePublish(pids); };
+}
+
+function runFreePublish(pids){
+  const ready=pids.filter(pid=>validatePlatform(pid).ok);
+  if(!ready.length){ toast('没有可生成的平台','请先修正校验问题','warn'); return; }
+  state.running=true; state.jobs={}; updatePublishButton();
+  ready.forEach(pid=>{
+    state.jobs[pid]={state:'manual',text:'待人工发布'};
+    addAudit(pid,'pack','发布包已生成');
+  });
+  state.running=false; updatePublishButton();
+  renderMatrix(); renderHero();
+  openPackModal(ready);
+  toast('发布包已生成',ready.length+' 个平台 · 零费用','ok');
+}
+
+function openPackModal(pids){
+  const c=state.content;
+  const body=`
+    <div class="gate-box"><b>${pids.length} 个平台待发布</b><br>逐个点击“复制文案”和“打开创作中心”。素材不会自动上传，请在平台页面手动选择原文件。</div>
+    <div class="pack-list">
+      ${pids.map(pid=>{
+        const p=getPlatform(pid), acc=getAccount(pid), e=effective(pid);
+        const preview=[e.title,e.body].filter(Boolean).join(' · ')||'（无文案，请补充）';
+        return `<div class="pack-row" data-pack="${pid}">
+          ${platformMark(p)}
+          <div class="pack-info"><b>${esc(p.name)}${acc&&acc.handle?' · '+esc(acc.handle):''}</b><span>${esc(preview.slice(0,90))}${preview.length>90?'…':''}</span></div>
+          <div class="pack-acts">
+            <button class="btn mini" data-copy="${pid}">复制文案</button>
+            <button class="btn mini accent" data-open-pack="${pid}">打开创作中心</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="warn-box">发布完成后请在各平台确认状态；本页不自动记账。优先使用平台自带的定时发布，替代本工具的定时字段。</div>
+    <div class="pack-media"><b style="color:var(--txt)">素材清单</b><br>${c.media.map(m=>esc(m.name)+' · '+fmtSize(m.size)).join('<br>')||'未添加素材'}${c.cover?'<br>封面：'+esc(c.cover.name):''}</div>`;
+  openModal('零成本发布包','复制文案 → 打开创作中心 → 手动发布',body,'<button class="btn ghost" data-close-pack>完成</button>');
+  $('[data-close-pack]').onclick=closeModal;
+  $$('[data-copy]').forEach(b=>b.onclick=()=>copyContent(b.dataset.copy));
+  $$('[data-open-pack]').forEach(b=>b.onclick=()=>{
+    const pid=b.dataset.openPack;
+    copyContent(pid);
+    window.open(getPlatform(pid).createUrl,'_blank','noopener');
+    b.textContent='已打开';
+  });
 }
 
 async function runPublish(pids){
@@ -1583,8 +1687,8 @@ function addAudit(pid,result,text){
 /* ============================== UI 同步 ============================== */
 function syncSettingsUI(){
   $$('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===state.settings.mode));
-  $('#drySwitch').classList.toggle('on',!!state.settings.dryRun);
-  $('#drySwitch').setAttribute('aria-pressed',state.settings.dryRun?'true':'false');
+  $('#freeSwitch').classList.toggle('on',!!state.settings.freeMode);
+  $('#freeSwitch').setAttribute('aria-pressed',state.settings.freeMode?'true':'false');
   renderVaultPill();
 }
 
@@ -1593,8 +1697,8 @@ function updatePublishButton(){
   btn.disabled=!!state.running;
   const icon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>`;
   btn.innerHTML=state.running
-    ? icon+' 发布中…'
-    : icon+' '+(state.settings.dryRun?'演练发布':'一键发布')+' <span class="kbd">⌘↵</span>';
+    ? icon+' 生成中…'
+    : icon+' '+(state.settings.freeMode?'生成发布包':state.settings.dryRun?'演练发布':'一键发布')+' <span class="kbd">⌘↵</span>';
 }
 
 function updateCounters(){
@@ -1624,6 +1728,10 @@ function bindEvents(){
   $('#modeSeg').addEventListener('click',e=>{
     const b=e.target.closest('button[data-mode]'); if(!b) return;
     const mode=b.dataset.mode;
+    if(mode==='live'&&state.settings.freeMode){
+      toast('零成本模式已开启','关闭零成本模式后才能连接后端','warn');
+      return;
+    }
     if(mode==='live'&&!state.settings.apiBase){
       toast('尚未配置后端','请先填写 BFF 地址，再切换真实模式','warn');
       openSettings(); return;
@@ -1681,10 +1789,13 @@ function bindEvents(){
     renderMatrix(); renderHero();
   };
 
-  $('#drySwitch').onclick=()=>{
-    state.settings.dryRun=!state.settings.dryRun;
-    persistSettings(); syncSettingsUI(); renderSafety(); updatePublishButton();
-    toast(state.settings.dryRun?'演练模式已开启':'演练模式已关闭',state.settings.dryRun?'不会真实提交':'提交前会二次确认',state.settings.dryRun?'ok':'warn');
+  $('#freeSwitch').onclick=()=>{
+    state.settings.freeMode=!state.settings.freeMode;
+    if(!state.settings.freeMode&&state.settings.mode==='live'&&!state.settings.apiBase){
+      state.settings.mode='demo';
+    }
+    persistSettings(); syncSettingsUI(); renderSafety(); renderHero(); updatePublishButton();
+    toast(state.settings.freeMode?'零成本模式已开启':'已关闭零成本模式',state.settings.freeMode?'只生成发布包，不调用平台 API':'如需真实提交，请在设置中配置后端并确认演练状态',state.settings.freeMode?'ok':'warn');
   };
   $('#btnPublish').onclick=openPublishConfirm;
   $('#btnSaveDraft').onclick=()=>{
