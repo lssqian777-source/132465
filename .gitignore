@@ -1,0 +1,12 @@
+# 桌面端构建产物与依赖，不入库（体积远超 GitHub 100MB 限制）
+OneCast*.zip
+onecast-desktop/node_modules/
+onecast-desktop/electron-win/
+onecast-desktop/release/
+
+# 临时截图
+.screenshots/.tmp/
+
+# 系统文件
+.DS_Store
+Thumbs.db

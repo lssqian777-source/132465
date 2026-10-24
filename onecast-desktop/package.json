@@ -1,0 +1,54 @@
+{
+  "name": "onecast",
+  "productName": "OneCast",
+  "version": "1.0.0",
+  "description": "OneCast - 自媒体多平台图文分发控制台",
+  "main": "main.js",
+  "author": "OneCast",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "app.onecast.desktop",
+    "productName": "OneCast",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "src/**/*",
+      "build/icon.ico",
+      "package.json"
+    ],
+    "extraFiles": [
+      {
+        "from": "extras",
+        "to": "."
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "OneCast-${version}-portable.exe"
+    }
+  }
+}
