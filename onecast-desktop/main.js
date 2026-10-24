@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, net, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, net } = require('electron');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -7,7 +7,7 @@ const fs = require('node:fs');
 // 公钥用于校验从 GitHub 拉取的 onecast.html，私钥仅在构建机上用于签名。
 // 若签名不匹配，本次更新会被丢弃，继续使用本地缓存或打包内置版本。
 const UPDATE_PUB_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEADsRl+0lt+kVjE7HWE9YNjvC2sGnkLRD1EX/okXiJR5w=
+MCowBQYDK2VwAyEArTedeaEMkJccU+BhOw7paOH4i6/27PUzFgwuT+D8zH0=
 -----END PUBLIC KEY-----`;
 
 const HTML_SOURCES = [
@@ -18,7 +18,6 @@ const SIG_SOURCES = [
   'https://raw.githubusercontent.com/lssqian777-source/132465/main/onecast-desktop/src/onecast.html.sig',
   'https://cdn.jsdelivr.net/gh/lssqian777-source/132465@main/onecast-desktop/src/onecast.html.sig'
 ];
-const RELEASES_URL = 'https://github.com/lssqian777-source/132465/releases';
 
 const CACHE_DIR = () => path.join(app.getPath('userData'), 'render');
 const CACHE_HTML = () => path.join(CACHE_DIR(), 'onecast.html');
@@ -85,31 +84,6 @@ async function checkHtmlUpdate() {
   } catch (e) {
     return false;
   }
-}
-
-function promptRestart(reason) {
-  const win = BrowserWindow.getAllWindows()[0];
-  const msg =
-    reason === 'shell'
-      ? 'OneCast 主程序有新版本，请到 Releases 页面下载安装包。'
-      : '已检测到界面更新，重启后生效。是否立即重启？';
-  const opts = {
-    type: 'info',
-    title: 'OneCast 更新',
-    message: msg,
-    buttons: reason === 'shell' ? ['去下载', '稍后'] : ['立即重启', '稍后'],
-    defaultId: 0
-  };
-  (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts)).then(
-    ({ response }) => {
-      if (reason === 'shell') {
-        if (response === 0) shell.openExternal(RELEASES_URL);
-      } else if (response === 0) {
-        app.relaunch();
-        app.exit(0);
-      }
-    }
-  );
 }
 
 // ---------- 窗口 ----------
@@ -217,15 +191,13 @@ if (!hasLock) {
   });
 
   app.whenReady().then(async () => {
-    // 启动时拉取最新界面，更新成功则提示重启生效
-    const updated = await checkHtmlUpdate();
+    // 启动时静默拉取最新界面（ed25519 验签），拉到就直接加载新版本；
+    // 拉不到（如未开代理）就继续用本地缓存/内置版本，全程不弹窗。
+    await checkHtmlUpdate();
     createWindow();
-    if (updated) setTimeout(() => promptRestart('html'), 1500);
 
-    // 运行期间每 6 小时检查一次
-    setInterval(async () => {
-      if (await checkHtmlUpdate()) promptRestart('html');
-    }, 6 * 60 * 60 * 1000);
+    // 运行期间每 6 小时静默刷新一次缓存，下次打开自动生效（不打扰用户）。
+    setInterval(() => { checkHtmlUpdate(); }, 6 * 60 * 60 * 1000);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

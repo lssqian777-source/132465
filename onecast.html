@@ -695,6 +695,16 @@ function loadLocal(){
   try{
     const a = JSON.parse(localStorage.getItem(LS.accounts)||'[]');
     if(Array.isArray(a)) state.accounts = a;
+    // v1.0.5：所有平台默认「手动/半自动」。历史上仍是 oauth/secret 但从未保存过 Token 的账号一并迁移。
+    let migrated=false;
+    state.accounts.forEach(acc=>{
+      if((acc.auth==='oauth'||acc.auth==='secret')&&acc.status!=='connected'){
+        acc.auth='manual';
+        if(acc.status==='pending') acc.status='manual';
+        migrated=true;
+      }
+    });
+    if(migrated) persistAccounts();
     const s = JSON.parse(localStorage.getItem(LS.settings)||'{}');
     state.settings = Object.assign({},DEFAULT_SETTINGS,s);
     state.audit = JSON.parse(localStorage.getItem(LS.audit)||'[]');
@@ -729,11 +739,10 @@ function seedAccounts(announce){
   const existing = new Map(state.accounts.map(a=>[a.pid,a]));
   PLATFORMS.forEach(p=>{
     if(existing.has(p.id)) return;
-    const preferred = p.api==='none' ? 'manual' : 'oauth';
-    state.accounts.push({pid:p.id,handle:'',auth:preferred,status:'unlinked',expiry:'',note:'',updatedAt:Date.now()});
+    state.accounts.push({pid:p.id,handle:'',auth:'manual',status:'unlinked',expiry:'',note:'',updatedAt:Date.now()});
   });
   persistAccounts();
-  if(announce) toast('已预填 7 个账号位','点击左侧平台，填写昵称与授权信息','ok');
+  if(announce) toast('已预填 7 个账号位','点击左侧平台，填写昵称即可（默认手动/半自动）','ok');
 }
 
 /* ============================== 保险箱 ============================== */
@@ -1207,7 +1216,7 @@ function openAccountPicker(){
 
 function openAccount(pid){
   const p=getPlatform(pid);
-  const acc=getAccount(pid)||{pid,handle:'',auth:p.api==='none'?'manual':'oauth',status:'unlinked',expiry:'',note:''};
+  const acc=getAccount(pid)||{pid,handle:'',auth:'manual',status:'unlinked',expiry:'',note:''};
   const locked=!!state.vault&&!state.vaultKey;
   const noVault=!state.vault;
   const saved=state.secrets&&state.secrets[pid];
