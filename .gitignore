@@ -10,3 +10,6 @@ onecast-desktop/release/
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# 平台生成的分享包
+.trae-html-share-packages/
