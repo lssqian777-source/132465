@@ -11,5 +11,6 @@ onecast-desktop/release/
 .DS_Store
 Thumbs.db
 
-# 平台生成的分享包
-.trae-html-share-packages/
+# 签名私钥（绝不能入库）
+.onecast-sign.key
+.onecast-sign.pub

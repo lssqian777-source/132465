@@ -1,7 +1,101 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, net, dialog } = require('electron');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const fs = require('node:fs');
 
+// ---------- HTML 热更新（ed25519 验签）----------
+// 公钥用于校验从 GitHub 拉取的 onecast.html，私钥仅在构建机上用于签名。
+// 若签名不匹配，本次更新会被丢弃，继续使用本地缓存或打包内置版本。
+const UPDATE_PUB_KEY = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEA0RpGpq8ZKpn0uBGRASKyNV8rJrlP43USiiSAUtXzWiM=
+-----END PUBLIC KEY-----`;
+
+const HTML_REMOTE =
+  'https://raw.githubusercontent.com/lssqian777-source/132465/main/onecast-desktop/src/onecast.html';
+const SIG_REMOTE =
+  'https://raw.githubusercontent.com/lssqian777-source/132465/main/onecast-desktop/src/onecast.html.sig';
+const RELEASES_URL = 'https://github.com/lssqian777-source/132465/releases';
+
+const CACHE_DIR = () => path.join(app.getPath('userData'), 'render');
+const CACHE_HTML = () => path.join(CACHE_DIR(), 'onecast.html');
+const BUNDLE_HTML = () => path.join(__dirname, 'src', 'onecast.html');
+
+function resolveHtml() {
+  // 优先使用经过验签的本地缓存；缓存不存在或损坏则回退到打包内置版本。
+  try {
+    const p = CACHE_HTML();
+    if (fs.existsSync(p)) {
+      const head = fs.readFileSync(p, 'utf8').slice(0, 64);
+      if (head.trimStart().startsWith('<!DOCTYPE')) return p;
+    }
+  } catch (e) {
+    /* cache unreadable: fall through to bundle */
+  }
+  return BUNDLE_HTML();
+}
+
+async function checkHtmlUpdate() {
+  try {
+    const [htmlRes, sigRes] = await Promise.all([
+      net.fetch(HTML_REMOTE, { signal: AbortSignal.timeout(15000) }),
+      net.fetch(SIG_REMOTE, { signal: AbortSignal.timeout(15000) })
+    ]);
+    if (!htmlRes.ok || !sigRes.ok) return false;
+
+    const html = await htmlRes.text();
+    const sigBase64 = (await sigRes.text()).trim();
+    const sig = Buffer.from(sigBase64, 'base64');
+
+    const ok = crypto.verify(
+      null,
+      Buffer.from(html),
+      { key: UPDATE_PUB_KEY, format: 'pem', type: 'spki' },
+      sig
+    );
+    if (!ok) return false;
+
+    let current = '';
+    try {
+      current = fs.readFileSync(CACHE_HTML(), 'utf8');
+    } catch (e) {
+      /* no cache yet */
+    }
+    if (current === html) return false; // 内容未变
+
+    fs.mkdirSync(CACHE_DIR(), { recursive: true });
+    fs.writeFileSync(CACHE_HTML(), html);
+    return true; // 已更新
+  } catch (e) {
+    return false;
+  }
+}
+
+function promptRestart(reason) {
+  const win = BrowserWindow.getAllWindows()[0];
+  const msg =
+    reason === 'shell'
+      ? 'OneCast 主程序有新版本，请到 Releases 页面下载安装包。'
+      : '已检测到界面更新，重启后生效。是否立即重启？';
+  const opts = {
+    type: 'info',
+    title: 'OneCast 更新',
+    message: msg,
+    buttons: reason === 'shell' ? ['去下载', '稍后'] : ['立即重启', '稍后'],
+    defaultId: 0
+  };
+  (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts)).then(
+    ({ response }) => {
+      if (reason === 'shell') {
+        if (response === 0) shell.openExternal(RELEASES_URL);
+      } else if (response === 0) {
+        app.relaunch();
+        app.exit(0);
+      }
+    }
+  );
+}
+
+// ---------- 窗口 ----------
 const STATE_FILE = () => path.join(app.getPath('userData'), 'window-state.json');
 const DEFAULT_BOUNDS = { width: 1440, height: 900 };
 
@@ -84,7 +178,7 @@ function createWindow() {
 
   win.on('close', () => saveBounds(win));
 
-  win.loadFile(path.join(__dirname, 'src', 'onecast.html'));
+  win.loadFile(resolveHtml());
   return win;
 }
 
@@ -105,8 +199,17 @@ if (!hasLock) {
     win.focus();
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    // 启动时拉取最新界面，更新成功则提示重启生效
+    const updated = await checkHtmlUpdate();
     createWindow();
+    if (updated) setTimeout(() => promptRestart('html'), 1500);
+
+    // 运行期间每 6 小时检查一次
+    setInterval(async () => {
+      if (await checkHtmlUpdate()) promptRestart('html');
+    }, 6 * 60 * 60 * 1000);
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

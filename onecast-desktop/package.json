@@ -9,11 +9,12 @@
   "private": true,
   "scripts": {
     "start": "electron .",
+    "sign": "node scripts/sign-html.js",
     "dist": "electron-builder --win",
     "dist:portable": "electron-builder --win portable"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
+    "electron": "33.4.11",
     "electron-builder": "^25.0.0"
   },
   "build": {
