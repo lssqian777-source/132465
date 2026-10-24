@@ -788,6 +788,13 @@ function lockVault(silent){
   state.vaultKey=null; state.secrets=null;
   if(!silent) toast('保险箱已锁定','内存中的凭据已清除','warn');
 }
+function resetVault(){
+  // 主密码不存储，忘记后无法解密已有凭据；只能清空保险箱重新录入。
+  localStorage.removeItem(LS.vault);
+  state.vault=null; state.vaultKey=null; state.secrets=null;
+  renderVaultPill(); renderSafety();
+  toast('保险箱已重置','原凭据无法恢复，请重新录入','warn');
+}
 function vaultStatus(){
   if(!state.vault) return 'unset';
   return state.vaultKey?'unlocked':'locked';
@@ -1289,13 +1296,18 @@ function openVault(){
       <div class="gate-box">输入主密码解锁保险箱，读取本机保存的授权凭据。连续输错不会锁定账号，但请确认环境安全。</div>
       <div class="field"><label>主密码</label><div class="pass-wrap"><input class="inp" id="vPass" type="password" placeholder="输入主密码"></div></div>
       <div class="form-note">解锁后 10 分钟内无操作会自动锁定（可在设置中调整）。</div>`;
-    const foot=`<button class="btn ghost" id="vCancel">取消</button><button class="btn primary" id="vUnlock">解锁</button>`;
+    const foot=`<button class="btn danger" id="vReset" style="margin-right:auto">重置保险箱</button><button class="btn ghost" id="vCancel">取消</button><button class="btn primary" id="vUnlock">解锁</button>`;
     openModal('解锁保险箱','本机凭据 · 不出设备',body,foot);
     $('#vCancel').onclick=closeModal;
     $('#vUnlock').onclick=async()=>{
       const pass=$('#vPass').value;
       if(!pass){ toast('请输入主密码','','warn'); return; }
       try{ await unlockVault(pass); closeModal(); renderAll(); }catch(e){}
+    };
+    $('#vReset').onclick=()=>{
+      if(confirm('重置将清空保险箱内已保存的所有 Token/Secret，且无法恢复。确定重置吗？')){
+        resetVault(); closeModal(); openVault();
+      }
     };
     $('#vPass').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#vUnlock').click(); });
   }
