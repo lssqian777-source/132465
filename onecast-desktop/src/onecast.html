@@ -770,19 +770,38 @@ async function persistSecrets(){
   return true;
 }
 async function createVault(pass){
+  if(!window.crypto||!crypto.subtle){
+    toast('无法创建保险箱','当前环境不支持加密（crypto.subtle 不可用）','err');
+    return false;
+  }
   const salt=bufToB64(crypto.getRandomValues(new Uint8Array(16)));
   const key=await deriveKey(pass,salt);
-  state.vaultKey=key; state.secrets={}; state.vault={ver:1,salt,iv:'',ct:''};
+  state.vaultKey=key; state.secrets={};
+  state.vault={ver:1,salt,iv:'',ct:'',meta:{createdAt:Date.now()}};
   await persistSecrets(); state.lastActive=Date.now();
   toast('保险箱已创建','凭据将使用 AES-GCM 加密后保存在本机','ok');
+  return true;
 }
 async function unlockVault(pass){
   try{
     const key=await deriveKey(pass,state.vault.salt);
     const secrets=await decryptJSON(state.vault,key);
     state.vaultKey=key; state.secrets=secrets||{}; state.lastActive=Date.now();
+    // 记录上次成功解锁时间（明文元数据，不含任何凭据），用于排查“哪个保险箱”
+    state.vault.meta=Object.assign({},state.vault.meta,{lastUnlockedAt:Date.now()});
+    persist(LS.vault,state.vault);
     toast('保险箱已解锁','','ok');
-  }catch(e){ toast('解锁失败','主密码不正确','err'); throw e; }
+  }catch(e){
+    console.warn('解锁失败',e);
+    // 区分“密码不对/数据损坏”与其它异常，不再一律报“主密码不正确”
+    const isDecryptError=e&&(e.name==='OperationError'||/decrypt|AES-GCM/i.test(e.message||''));
+    if(isDecryptError){
+      toast('解锁失败','主密码不正确，或本机保险箱数据已损坏（可点“重置保险箱”重新开始）','err');
+    }else{
+      toast('解锁失败','环境异常：'+(e.message||e)+'（详情见控制台）','err');
+    }
+    throw e;
+  }
 }
 function lockVault(silent){
   state.vaultKey=null; state.secrets=null;
@@ -1288,17 +1307,28 @@ function openVault(){
       if(a.length<8){ toast('密码太短','至少 8 位','err'); return; }
       if(a!==b){ toast('两次输入不一致','','err'); return; }
       $('#vCreate').disabled=true;
-      await createVault(a);
-      closeModal(); renderAll();
+      const ok=await createVault(a);
+      $('#vCreate').disabled=false;
+      if(ok){ closeModal(); renderAll(); }
     };
   }else{
+    const meta=state.vault.meta||{};
+    const fmtDT=ts=>new Date(ts).toLocaleString('zh-CN',{hour12:false});
+    const metaLine=meta.createdAt
+      ? `<div class="form-note">这个保险箱创建于 ${fmtDT(meta.createdAt)}${meta.lastUnlockedAt?'，上次成功解锁 '+fmtDT(meta.lastUnlockedAt):''}。如果时间和你印象中不符，说明它不是你最近设的那个，可点左下角「重置保险箱」重新开始。</div>`
+      : '';
     const body=`
       <div class="gate-box">输入主密码解锁保险箱，读取本机保存的授权凭据。连续输错不会锁定账号，但请确认环境安全。</div>
-      <div class="field"><label>主密码</label><div class="pass-wrap"><input class="inp" id="vPass" type="password" placeholder="输入主密码"></div></div>
-      <div class="form-note">解锁后 10 分钟内无操作会自动锁定（可在设置中调整）。</div>`;
+      <div class="field"><label>主密码</label><div class="pass-wrap"><input class="inp" id="vPass" type="password" placeholder="输入主密码（建议切换到英文输入法）"><button type="button" class="eye" id="vEye">显示</button></div></div>
+      <div class="form-note">解锁后 10 分钟内无操作会自动锁定（可在设置中调整）。</div>
+      ${metaLine}`;
     const foot=`<button class="btn danger" id="vReset" style="margin-right:auto">重置保险箱</button><button class="btn ghost" id="vCancel">取消</button><button class="btn primary" id="vUnlock">解锁</button>`;
     openModal('解锁保险箱','本机凭据 · 不出设备',body,foot);
     $('#vCancel').onclick=closeModal;
+    $('#vEye').onclick=()=>{
+      const inp=$('#vPass'); const show=inp.type==='password';
+      inp.type=show?'text':'password'; $('#vEye').textContent=show?'隐藏':'显示';
+    };
     $('#vUnlock').onclick=async()=>{
       const pass=$('#vPass').value;
       if(!pass){ toast('请输入主密码','','warn'); return; }
@@ -1874,9 +1904,7 @@ function init(){
   bindEvents();
   syncSettingsUI();
   renderAll();
-  if(!state.vault){
-    setTimeout(()=>toast('建议先设置加密保险箱','右上角“未设置保险箱” → 设置主密码','warn'),900);
-  }
+  // 不再主动提醒设置保险箱：手动/零成本模式完全不需要它，只有要保存 Token 时才用得上
 }
 
 init();

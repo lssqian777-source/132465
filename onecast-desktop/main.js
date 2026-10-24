@@ -10,10 +10,14 @@ const UPDATE_PUB_KEY = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEADsRl+0lt+kVjE7HWE9YNjvC2sGnkLRD1EX/okXiJR5w=
 -----END PUBLIC KEY-----`;
 
-const HTML_REMOTE =
-  'https://raw.githubusercontent.com/lssqian777-source/132465/main/onecast-desktop/src/onecast.html';
-const SIG_REMOTE =
-  'https://raw.githubusercontent.com/lssqian777-source/132465/main/onecast-desktop/src/onecast.html.sig';
+const HTML_SOURCES = [
+  'https://raw.githubusercontent.com/lssqian777-source/132465/main/onecast-desktop/src/onecast.html',
+  'https://cdn.jsdelivr.net/gh/lssqian777-source/132465@main/onecast-desktop/src/onecast.html'
+];
+const SIG_SOURCES = [
+  'https://raw.githubusercontent.com/lssqian777-source/132465/main/onecast-desktop/src/onecast.html.sig',
+  'https://cdn.jsdelivr.net/gh/lssqian777-source/132465@main/onecast-desktop/src/onecast.html.sig'
+];
 const RELEASES_URL = 'https://github.com/lssqian777-source/132465/releases';
 
 const CACHE_DIR = () => path.join(app.getPath('userData'), 'render');
@@ -34,13 +38,26 @@ function resolveHtml() {
   return BUNDLE_HTML();
 }
 
+// 依次尝试多个更新源（raw.githubusercontent.com 在部分网络不可达，jsDelivr 作为备用）
+async function fetchFirstOk(urls) {
+  for (const u of urls) {
+    try {
+      const r = await net.fetch(u, { signal: AbortSignal.timeout(15000) });
+      if (r.ok) return r;
+    } catch (e) {
+      /* try next source */
+    }
+  }
+  return null;
+}
+
 async function checkHtmlUpdate() {
   try {
     const [htmlRes, sigRes] = await Promise.all([
-      net.fetch(HTML_REMOTE, { signal: AbortSignal.timeout(15000) }),
-      net.fetch(SIG_REMOTE, { signal: AbortSignal.timeout(15000) })
+      fetchFirstOk(HTML_SOURCES),
+      fetchFirstOk(SIG_SOURCES)
     ]);
-    if (!htmlRes.ok || !sigRes.ok) return false;
+    if (!htmlRes || !sigRes) return false;
 
     const html = await htmlRes.text();
     const sigBase64 = (await sigRes.text()).trim();
