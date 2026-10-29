@@ -1,7 +1,7 @@
 {
   "name": "onecast",
   "productName": "OneCast",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "OneCast - 自媒体多平台图文分发控制台",
   "main": "main.js",
   "author": "OneCast",
@@ -14,8 +14,11 @@
     "dist:portable": "electron-builder --win portable"
   },
   "devDependencies": {
-    "electron": "33.4.11",
-    "electron-builder": "^25.0.0"
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "playwright-core": "1.48.2"
   },
   "build": {
     "appId": "app.onecast.desktop",
@@ -26,6 +29,8 @@
     },
     "files": [
       "main.js",
+      "preload.js",
+      "automation.js",
       "src/**/*",
       "build/icon.ico",
       "package.json"

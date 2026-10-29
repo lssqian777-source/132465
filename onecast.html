@@ -666,7 +666,7 @@ const LS = {
   accounts:'onecast.accounts.v1', settings:'onecast.settings.v1', audit:'onecast.audit.v1',
   vault:'onecast.vault.v1', content:'onecast.content.v1', hashes:'onecast.hashes.v1'
 };
-const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10,freeMode:true};
+const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10,freeMode:true,autoPublish:false,autoSubmit:false};
 
 const state = {
   accounts:[], settings:{...DEFAULT_SETTINGS}, audit:[], hashes:[],
@@ -1484,6 +1484,14 @@ function openSettings(){
       </div>
     </div>
     <label class="confirm-check" style="margin:4px 0 12px"><input type="checkbox" id="stDry" ${s.dryRun?'checked':''}> 默认开启演练模式（只校验，不提交）</label>
+    <div style="border-top:1px solid var(--line);padding-top:12px;margin-bottom:12px">
+      <div style="font-size:10.5px;color:var(--muted);margin-bottom:7px">实验性自动发布（可选）</div>
+      <label class="confirm-check" style="margin:0 0 7px"><input type="checkbox" id="stAuto" ${s.autoPublish?'checked':''}> 启用自动发布：用本机 Chrome / Edge 打开各平台创作中心，自动上传素材并填好文案</label>
+      <div class="warn-box" style="margin:0 0 8px">该方式通过模拟人工操作完成，<b>不符合各平台的机器发布条款</b>，存在被限流或封号的风险，建议先用一个新注册的小号试点。平台页面改版后可能失效。</div>
+      <label class="confirm-check" style="margin:0 0 9px"><input type="checkbox" id="stAutoSubmit" ${s.autoSubmit?'checked':''}> 允许自动点击「发布」按钮（默认只填表，最后一步留给你确认）</label>
+      <button class="btn mini" id="stWorkbench" type="button">打开自动发布工作台（首次登录用）</button>
+      <div class="inline-hint" style="margin-top:7px">工作台是一个独立浏览器窗口，登录态长期保留；不会读取你日常浏览器的 Cookie。</div>
+    </div>
     <div style="border-top:1px solid var(--line);padding-top:12px">
       <div style="font-size:10.5px;color:var(--muted);margin-bottom:7px">本地数据（不包含保险箱与 Token）</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap">
@@ -1506,10 +1514,18 @@ function openSettings(){
     state.settings.autoLock=Math.max(0,Math.min(120,Number($('#stLock').value)||0));
     state.settings.dryRun=$('#stDry').checked;
     state.settings.freeMode=free;
+    state.settings.autoPublish=$('#stAuto').checked;
+    state.settings.autoSubmit=$('#stAutoSubmit').checked;
     persistSettings(); closeModal(); syncSettingsUI(); renderAll();
-    toast('设置已保存',state.settings.freeMode?'零成本模式：不会调用平台 API':mode==='live'?'真实模式：请求将发往后端':'演示模式：不会发起请求','ok');
+    toast('设置已保存',state.settings.autoPublish?'自动发布已启用（'+(state.settings.autoSubmit?'自动提交':'仅自动填表')+'）':state.settings.freeMode?'零成本模式：不会调用平台 API':mode==='live'?'真实模式：请求将发往后端':'演示模式：不会发起请求','ok');
   };
   $('#stExport').onclick=exportData;
+  $('#stWorkbench').onclick=async ()=>{
+    const api=window.onecastAuto;
+    if(!api){ toast('自动发布不可用','当前环境不支持（只有桌面版可以驱动浏览器）','err'); return; }
+    const r=await api.openWorkbench();
+    toast(r.ok?'工作台已打开':'打开失败',r.message||'',r.ok?'ok':'err');
+  };
   $('#stImportBtn').onclick=()=>$('#stImport').click();
   $('#stImport').onchange=async e=>{
     const f=e.target.files[0]; if(!f) return;
@@ -1725,9 +1741,20 @@ function openFreeConfirm(pids){
     return {p,acc,v,detail};
   });
   const okCount=rows.filter(r=>r.v.ok).length;
+  const autoOn=!!(state.settings.autoPublish&&window.onecastAuto);
+  const execBlock=autoOn?`
+    <div class="field"><label>执行方式</label>
+      <select class="sel" id="freeExec">
+        <option value="fill">自动填表：自动传素材 + 填文案，发布由你点</option>
+        <option value="submit" ${state.settings.autoSubmit?'selected':''}>全自动：自动填写并尝试点击发布（风险更高）</option>
+        <option value="pack">半自动：只生成发布包，我手动去各平台发</option>
+      </select>
+    </div>
+    <div class="warn-box">自动方式会打开一个独立浏览器窗口操作各平台，<b>不符合平台机器发布条款</b>，请先用小号试点。微信与 Instagram 仍会退回半自动。</div>`:'';
   const body=`
-    <div class="gate-box"><b>零成本发布包 · ${okCount} / ${rows.length} 个平台可生成</b><br>不调用任何平台 API，不产生费用。本页会准备各平台文案与创作中心入口，发布动作由你在平台内确认。</div>
+    <div class="gate-box"><b>发布清单 · ${okCount} / ${rows.length} 个平台可执行</b><br>${autoOn?'自动发布已启用：将按下面选择的方式处理各平台。':'不调用任何平台 API，不产生费用。本页会准备各平台文案与创作中心入口，发布动作由你在平台内确认。'}</div>
     ${okCount===0?'<div class="warn-box err">选中的平台都没有通过校验，请先补充素材或文案。</div>':''}
+    ${execBlock}
     <div class="confirm-list">
       ${rows.map(r=>`<div class="confirm-row">
         ${platformMark(r.p)}
@@ -1735,14 +1762,24 @@ function openFreeConfirm(pids){
         <span class="vchip ${r.v.ok?(r.v.warnings.length?'warn':'ok'):'err'}">${r.v.ok?(r.v.warnings.length?'注意':'就绪'):'跳过'}</span>
       </div>`).join('')}
     </div>
-    <div class="warn-box">发布包只包含文案、平台入口和素材清单，不会自动上传文件，也不会自动点击发布。可直接使用各平台自带的定时发布。</div>
-    <label class="confirm-check"><input type="checkbox" id="freeConfirm"> 我了解：发布需要我在各平台手动确认，本操作不会产生 API 费用。</label>`;
+    ${autoOn?'':'<div class="warn-box">发布包只包含文案、平台入口和素材清单，不会自动上传文件，也不会自动点击发布。可直接使用各平台自带的定时发布。</div>'}
+    <label class="confirm-check"><input type="checkbox" id="freeConfirm"> ${autoOn?'我了解自动发布的风险，并确认使用自己的账号操作。':'我了解：发布需要我在各平台手动确认，本操作不会产生 API 费用。'}</label>`;
   const foot=`<button class="btn ghost" id="freeCancel">取消</button>
     <button class="btn primary" id="freeStart" disabled>生成发布包</button>`;
-  openModal('免费发布清单','零 API 费用 · 逐平台人工确认',body,foot);
+  openModal(autoOn?'发布确认':'免费发布清单',autoOn?'自动发布（实验性）· 可切换半自动':'零 API 费用 · 逐平台人工确认',body,foot);
   $('#freeCancel').onclick=closeModal;
   $('#freeConfirm').onchange=e=>{ $('#freeStart').disabled=!e.target.checked||okCount===0; };
-  $('#freeStart').onclick=()=>{ closeModal(); runFreePublish(pids); };
+  const syncLabel=()=>{
+    const v=$('#freeExec')?$('#freeExec').value:'pack';
+    $('#freeStart').textContent=v==='fill'?'开始自动填表':v==='submit'?'开始自动发布':'生成发布包';
+  };
+  if($('#freeExec')) $('#freeExec').onchange=syncLabel;
+  syncLabel();
+  $('#freeStart').onclick=()=>{
+    const v=$('#freeExec')?$('#freeExec').value:'pack';
+    closeModal();
+    if(v==='pack') runFreePublish(pids); else runAutoPublish(pids,v==='submit');
+  };
 }
 
 function runFreePublish(pids){
@@ -1758,6 +1795,61 @@ function runFreePublish(pids){
   openPackModal(ready);
   toast('发布包已生成',ready.length+' 个平台 · 零费用','ok');
 }
+
+/* 实验性自动发布：由主进程驱动本机 Chrome/Edge 完成上传与填表 */
+const AUTO_STAGE_MAP={
+  start:['running','排队中'], open:['running','打开创作中心'],
+  upload:['running','上传素材 / 填文案'], filled:['manual','已填好，待点发布'],
+  submitted:['success','已提交'], login:['manual','需先登录工作台'],
+  error:['blocked','自动化出错'], skip:['blocked','该平台不支持自动'], busy:['blocked','任务冲突']
+};
+async function runAutoPublish(pids, submit){
+  const api=window.onecastAuto;
+  if(!api){ toast('自动发布不可用','只有桌面版能驱动浏览器','err'); return; }
+  const ready=pids.filter(pid=>validatePlatform(pid).ok);
+  if(!ready.length){ toast('没有可执行的平台','请先修正校验问题','warn'); return; }
+
+  const media=state.content.media.filter(m=>m.url&&m.url.startsWith('data:'));
+  const missing=state.content.media.length-media.length;
+  if(state.content.media.length&&!media.length){
+    toast('素材无法传给平台','素材没有保存在本机素材库中，请重新上传一次','err');
+    return;
+  }
+  if(missing) toast('部分素材被跳过',missing+' 个素材不是本机保存格式，已跳过','warn');
+
+  const jobs=ready.map(pid=>({pid,content:effective(pid),files:media.map(m=>({name:m.name,dataUrl:m.url}))}));
+  state.running=true; state.jobs={};
+  ready.forEach(pid=>{ state.jobs[pid]={state:'running',text:'排队中'}; });
+  updatePublishButton(); renderMatrix(); renderHero();
+  toast(submit?'开始自动发布':'开始自动填表',ready.length+' 个平台 · 自动化窗口会被打开，请勿关闭','ok');
+
+  let res;
+  try{ res=await api.run({jobs,submit:!!submit}); }
+  catch(e){ res={ok:false,error:String(e.message||e)}; }
+  state.running=false; renderAll();
+  if(!res.ok) toast('自动发布失败',res.error||'未知错误','err');
+  const results=res.results||[];
+  const done=results.filter(r=>r.ok).length;
+  toast('自动发布结束',done+' / '+ready.length+' 个平台已处理，请在平台内确认','ok');
+  if(results.length) openAutoResult(results,submit);
+}
+
+function openAutoResult(results,submit){
+  const map={filled:'已填好（点发布）',submitted:'已提交',login:'需先登录',error:'出错',skip:'不支持自动'};
+  const body=`
+    <div class="gate-box">自动任务已结束。<b>${results.filter(r=>r.ok).length} 个成功</b>，${results.filter(r=>!r.ok).length} 个需处理。${submit?'已尝试提交的请到平台后台核对是否真的发出。':'填好内容的窗口已关闭，请在各平台重新打开创作中心完成发布。'}</div>
+    <div class="confirm-list">
+      ${results.map(r=>`<div class="confirm-row">
+        ${platformMark(getPlatform(r.pid))}
+        <span class="cnt"><b>${esc(getPlatform(r.pid).name)}</b><span>${esc(r.message||'')}</span></span>
+        <span class="vchip ${r.ok?'ok':'err'}">${map[r.stage]||r.stage}</span>
+      </div>`).join('')}
+    </div>
+    <div class="warn-box">若某平台停在「需先登录」：到设置 → 打开自动发布工作台，在窗口里登录该平台后再重试。失败截图保存在 %APPDATA%\\OneCast\\automation-logs\\。</div>`;
+  openModal('自动发布结果',submit?'自动提交 · 请核对结果':'仅自动填表 · 发布仍由你确认',body,'<button class="btn primary" data-close-auto>知道了</button>');
+  $('[data-close-auto]').onclick=closeModal;
+}
+
 
 function openPackModal(pids){
   const c=state.content;
@@ -1925,6 +2017,18 @@ function bindEvents(){
 
   $('#vaultPill').onclick=openVault;
   $('#btnSettings').onclick=openSettings;
+
+  // 自动发布进度：主进程逐个平台推送状态，这里同步到矩阵与日志
+  if(window.onecastAuto&&window.onecastAuto.onProgress){
+    window.onecastAuto.onProgress(d=>{
+      if(!d||!d.pid) return;
+      const m=AUTO_STAGE_MAP[d.stage]||['running',d.message||''];
+      state.jobs[d.pid]={state:m[0],text:((d.message||m[1])+'').slice(0,30)};
+      if(d.type==='result') addAudit(d.pid,m[0]==='success'?'success':m[0]==='manual'?'manual':'blocked',d.message||m[1]);
+      renderMatrix(); renderHero();
+    });
+  }
+
   $('#btnPrefill').onclick=()=>{ seedAccounts(true); renderAll(); };
   $('#btnAddAccount').onclick=openAccountPicker;
   $('#btnClearAudit').onclick=()=>{

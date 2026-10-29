@@ -1,8 +1,13 @@
 # 桌面端构建产物与依赖，不入库（体积远超 GitHub 100MB 限制）
 OneCast*.zip
+OneCast*.exe
 onecast-desktop/node_modules/
 onecast-desktop/electron-win/
 onecast-desktop/release/
+
+# 签名私钥（绝不入库：泄露即可伪造可通过验签的热更新）
+.onecast-sign.key
+onecast-desktop/.signkey.pem
 
 # 临时截图
 .screenshots/.tmp/
@@ -10,9 +15,3 @@ onecast-desktop/release/
 # 系统文件
 .DS_Store
 Thumbs.db
-
-# 签名私钥（绝不能入库）
-.onecast-sign.key
-.onecast-sign.pub
-onecast-desktop/.signkey.pem
-onecast-desktop/src/onecast.html.sig.tmp
