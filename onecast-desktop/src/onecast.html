@@ -115,8 +115,15 @@ a:hover{text-decoration:underline}
 .dz-actions{display:flex;gap:6px;justify-content:center;margin-top:11px;position:relative;z-index:3}
 
 .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:11px}
-.m-item{position:relative;border-radius:9px;overflow:hidden;background:#0b0d14;border:1px solid var(--line);aspect-ratio:1}
+.m-item{position:relative;border-radius:9px;overflow:hidden;background:#0b0d14;border:1px solid var(--line);aspect-ratio:1;cursor:pointer;transition:border-color .15s}
+.m-item:hover{border-color:var(--accent)}
 .m-item img{width:100%;height:100%;object-fit:cover;display:block}
+.pv-wrap{display:flex;justify-content:center;align-items:center;background:#07080c;border:1px solid var(--line);border-radius:10px;padding:10px;min-height:200px}
+.pv-media{max-width:100%;max-height:56vh;object-fit:contain;border-radius:8px;display:block}
+video.pv-media{background:#000}
+.pv-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:9px;font-size:11px}
+.pv-name{color:#dfe4f5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pv-sub{color:var(--dim);flex-shrink:0}
 .m-video{width:100%;height:100%;display:grid;place-items:center;background:
   radial-gradient(circle at 30% 25%,rgba(109,140,255,.28),transparent 55%),#11141d;color:#cfd6ff}
 .m-video svg{width:24px;height:24px;opacity:.9}
@@ -659,7 +666,7 @@ const LS = {
   accounts:'onecast.accounts.v1', settings:'onecast.settings.v1', audit:'onecast.audit.v1',
   vault:'onecast.vault.v1', content:'onecast.content.v1', hashes:'onecast.hashes.v1'
 };
-const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10,freeMode:true};
+const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10,freeMode:true,autoPublish:false,autoSubmit:false};
 
 const state = {
   accounts:[], settings:{...DEFAULT_SETTINGS}, audit:[], hashes:[],
@@ -695,6 +702,16 @@ function loadLocal(){
   try{
     const a = JSON.parse(localStorage.getItem(LS.accounts)||'[]');
     if(Array.isArray(a)) state.accounts = a;
+    // v1.0.5：所有平台默认「手动/半自动」。历史上仍是 oauth/secret 但从未保存过 Token 的账号一并迁移。
+    let migrated=false;
+    state.accounts.forEach(acc=>{
+      if((acc.auth==='oauth'||acc.auth==='secret')&&acc.status!=='connected'){
+        acc.auth='manual';
+        if(acc.status==='pending') acc.status='manual';
+        migrated=true;
+      }
+    });
+    if(migrated) persistAccounts();
     const s = JSON.parse(localStorage.getItem(LS.settings)||'{}');
     state.settings = Object.assign({},DEFAULT_SETTINGS,s);
     state.audit = JSON.parse(localStorage.getItem(LS.audit)||'[]');
@@ -708,9 +725,7 @@ function loadLocal(){
       state.content.visibility = c.visibility||'public';
       state.overrides = c.overrides||{};
       state.content.demoMedia = !!c.demoMedia;
-      if(state.content.demoMedia){
-        state.content.media=sampleMediaSet();
-      }
+      // 素材改由本机素材库（IndexedDB）恢复：有真实素材用真实素材，否则按标记恢复示例
     }
   }catch(e){ console.warn('读取本地数据失败',e); }
   if(!state.accounts.length) seedAccounts(false);
@@ -729,11 +744,10 @@ function seedAccounts(announce){
   const existing = new Map(state.accounts.map(a=>[a.pid,a]));
   PLATFORMS.forEach(p=>{
     if(existing.has(p.id)) return;
-    const preferred = p.api==='none' ? 'manual' : 'oauth';
-    state.accounts.push({pid:p.id,handle:'',auth:preferred,status:'unlinked',expiry:'',note:'',updatedAt:Date.now()});
+    state.accounts.push({pid:p.id,handle:'',auth:'manual',status:'unlinked',expiry:'',note:'',updatedAt:Date.now()});
   });
   persistAccounts();
-  if(announce) toast('已预填 7 个账号位','点击左侧平台，填写昵称与授权信息','ok');
+  if(announce) toast('已预填 7 个账号位','点击左侧平台，填写昵称即可（默认手动/半自动）','ok');
 }
 
 /* ============================== 保险箱 ============================== */
@@ -770,23 +784,49 @@ async function persistSecrets(){
   return true;
 }
 async function createVault(pass){
+  if(!window.crypto||!crypto.subtle){
+    toast('无法创建保险箱','当前环境不支持加密（crypto.subtle 不可用）','err');
+    return false;
+  }
   const salt=bufToB64(crypto.getRandomValues(new Uint8Array(16)));
   const key=await deriveKey(pass,salt);
-  state.vaultKey=key; state.secrets={}; state.vault={ver:1,salt,iv:'',ct:''};
+  state.vaultKey=key; state.secrets={};
+  state.vault={ver:1,salt,iv:'',ct:'',meta:{createdAt:Date.now()}};
   await persistSecrets(); state.lastActive=Date.now();
   toast('保险箱已创建','凭据将使用 AES-GCM 加密后保存在本机','ok');
+  return true;
 }
 async function unlockVault(pass){
   try{
     const key=await deriveKey(pass,state.vault.salt);
     const secrets=await decryptJSON(state.vault,key);
     state.vaultKey=key; state.secrets=secrets||{}; state.lastActive=Date.now();
+    // 记录上次成功解锁时间（明文元数据，不含任何凭据），用于排查“哪个保险箱”
+    state.vault.meta=Object.assign({},state.vault.meta,{lastUnlockedAt:Date.now()});
+    persist(LS.vault,state.vault);
     toast('保险箱已解锁','','ok');
-  }catch(e){ toast('解锁失败','主密码不正确','err'); throw e; }
+  }catch(e){
+    console.warn('解锁失败',e);
+    // 区分“密码不对/数据损坏”与其它异常，不再一律报“主密码不正确”
+    const isDecryptError=e&&(e.name==='OperationError'||/decrypt|AES-GCM/i.test(e.message||''));
+    if(isDecryptError){
+      toast('解锁失败','主密码不正确，或本机保险箱数据已损坏（可点“重置保险箱”重新开始）','err');
+    }else{
+      toast('解锁失败','环境异常：'+(e.message||e)+'（详情见控制台）','err');
+    }
+    throw e;
+  }
 }
 function lockVault(silent){
   state.vaultKey=null; state.secrets=null;
   if(!silent) toast('保险箱已锁定','内存中的凭据已清除','warn');
+}
+function resetVault(){
+  // 主密码不存储，忘记后无法解密已有凭据；只能清空保险箱重新录入。
+  localStorage.removeItem(LS.vault);
+  state.vault=null; state.vaultKey=null; state.secrets=null;
+  renderVaultPill(); renderSafety();
+  toast('保险箱已重置','原凭据无法恢复，请重新录入','warn');
 }
 function vaultStatus(){
   if(!state.vault) return 'unset';
@@ -889,14 +929,61 @@ function renderVaultPill(){
   txt.textContent=st==='unlocked'?'保险箱已解锁':st==='locked'?'保险箱已锁定':'未设置保险箱';
 }
 
+/* ============================== 素材库（IndexedDB 持久化）============================== */
+// 上传的素材以 data URL 形式存进本机 IndexedDB，重启后自动恢复。
+// 若环境不支持 IndexedDB（如受限 WebView），自动降级为仅本次会话可用。
+const IDB={
+  db:null, usable:false,
+  open(){ return new Promise(res=>{
+    if(typeof indexedDB==='undefined'){ res(false); return; }
+    let req;
+    try{ req=indexedDB.open('onecast-media',1); }catch(e){ res(false); return; }
+    req.onupgradeneeded=()=>{ const db=req.result;
+      if(!db.objectStoreNames.contains('media')) db.createObjectStore('media',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); };
+    req.onsuccess=()=>{ IDB.db=req.result; IDB.usable=true; res(true); };
+    req.onerror=()=>res(false);
+    req.onblocked=()=>res(false);
+    setTimeout(()=>{ if(!IDB.usable) res(false); },3000);
+  });},
+  _run(store,mode,fn){ return new Promise(res=>{
+    if(!IDB.usable){ res(null); return; }
+    try{ fn(IDB.db.transaction(store,mode).objectStore(store))
+      .onsuccess=e=>res(e.target.result!==undefined?e.target.result:true); }
+    catch(e){ res(null); } });},
+  put(store,val){ return IDB._run(store,'readwrite',s=>s.put(val)); },
+  del(store,key){ return IDB._run(store,'readwrite',s=>s.delete(key)); },
+  get(store,key){ return IDB._run(store,'readonly',s=>s.get(key)); },
+  all(store){ return IDB._run(store,'readonly',s=>s.getAll()); }
+};
+function fileToDataURL(file){ return new Promise((res,rej)=>{
+  const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsDataURL(file); });}
+async function loadMediaLibrary(){
+  if(!await IDB.open()) return;
+  try{
+    const items=(await IDB.all('media'))||[];
+    if(items.length){
+      items.sort((a,b)=>(a.addedAt||0)-(b.addedAt||0));
+      state.content.media=items.map(m=>({id:m.id,name:m.name,size:m.size,type:m.type,kind:m.kind,hash:m.hash,url:m.dataUrl}));
+    }else if(state.content.demoMedia){
+      state.content.media=sampleMediaSet();
+    }
+    const cov=await IDB.get('kv','cover');
+    if(cov&&cov.dataUrl) state.content.cover={name:cov.name,url:cov.dataUrl};
+  }catch(e){ /* 素材库读取失败：保持现有状态，不影响使用 */ }
+}
+
 /* ============================== 素材 ============================== */
 function renderMedia(){
   const grid=$('#mediaGrid'); if(!grid) return;
   const media=state.content.media;
   grid.innerHTML='';
   media.forEach(m=>{
+    const idx=media.indexOf(m);
     const d=document.createElement('div');
     d.className='m-item';
+    d.title='点击预览';
+    d.onclick=()=>openPreview(idx);
     if(m.kind==='image'&&m.url){
       d.innerHTML=`<img src="${m.url}" alt="${escAttr(m.name)}"><div class="m-name">${esc(m.name)}</div>`;
     }else if(m.kind==='image'){
@@ -906,7 +993,12 @@ function renderMedia(){
     }
     const x=document.createElement('button');
     x.className='m-x'; x.textContent='×'; x.title='移除';
-    x.onclick=()=>{ state.content.media=state.content.media.filter(i=>i.id!==m.id); state.content.demoMedia=false; clearJobs(); renderMedia(); renderMatrix(); renderHero(); };
+    x.onclick=(e)=>{ e.stopPropagation();
+      state.content.media=state.content.media.filter(i=>i.id!==m.id);
+      state.content.demoMedia=false;
+      IDB.del('media',m.id);
+      clearJobs(); renderMedia(); renderMatrix(); renderHero();
+    };
     d.appendChild(x);
     grid.appendChild(d);
   });
@@ -915,7 +1007,8 @@ function renderMedia(){
   meta.style.display='flex';
   const total=media.reduce((s,m)=>s+m.size,0);
   const kind=media.every(m=>m.kind==='video')?'视频':media.every(m=>m.kind==='image')?'图片':'混合';
-  meta.innerHTML=`<span>${media.length} 个 · ${fmtSize(total)} · ${kind}</span><span>指纹 <code>${esc(mediaFingerprint().slice(0,16))}</code></span>`;
+  const saved=IDB.usable&&media.some(m=>m.url&&m.url.startsWith('data:'))?' · 重启后保留':'';
+  meta.innerHTML=`<span>${media.length} 个 · ${fmtSize(total)} · ${kind}${saved}</span><span>指纹 <code>${esc(mediaFingerprint().slice(0,16))}</code></span>`;
 
   const cp=$('#coverPh');
   if(state.content.cover&&state.content.cover.url){
@@ -941,9 +1034,19 @@ async function addFiles(files){
   for(const f of list){
     const kind=f.type.startsWith('video/')?'video':'image';
     const fp=await fileFingerprint(f);
-    state.content.media.push({id:uid(),name:f.name,size:f.size,type:f.type,kind,hash:fp,url:URL.createObjectURL(f)});
+    const item={id:uid(),name:f.name,size:f.size,type:f.type,kind,hash:fp,url:''};
+    // 优先存为 data URL 写入本机素材库（重启保留）；环境不支持时退回临时链接（仅本次可用）
+    try{
+      const dataUrl=await fileToDataURL(f);
+      item.url=dataUrl;
+      await IDB.put('media',{id:item.id,name:item.name,size:item.size,type:item.type,kind:item.kind,hash:item.hash,dataUrl,addedAt:Date.now()});
+    }catch(e){
+      item.url=URL.createObjectURL(f);
+    }
+    state.content.media.push(item);
   }
   state.content.demoMedia=false;
+  if(list.length&&!IDB.usable) toast('素材仅本次可用','当前环境不支持本机素材库，重启后需重新添加','warn');
   clearJobs(); renderMedia(); renderMatrix(); renderHero();
 }
 
@@ -959,15 +1062,23 @@ function sampleMediaSet(){
   }));
 }
 function addSampleMedia(){
+  const old=state.content.media;
   state.content.media=sampleMediaSet();
   state.content.demoMedia=true; persistContent();
+  old.forEach(m=>IDB.del('media',m.id));
   clearJobs(); renderMedia(); renderMatrix(); renderHero();
   toast('已载入示例图文','3 张图片，仅用于演示流程，不会上传','ok');
 }
 
-function setCover(file){
+async function setCover(file){
   if(!file||!file.type.startsWith('image/')) return;
-  state.content.cover={name:file.name,url:URL.createObjectURL(file)};
+  try{
+    const dataUrl=await fileToDataURL(file);
+    state.content.cover={name:file.name,url:dataUrl};
+    await IDB.put('kv',{k:'cover',name:file.name,dataUrl});
+  }catch(e){
+    state.content.cover={name:file.name,url:URL.createObjectURL(file)};
+  }
   renderMedia();
 }
 
@@ -975,6 +1086,43 @@ function mediaFingerprint(){
   const media=state.content.media;
   if(!media.length) return 'empty';
   return media.map(m=>m.hash).join('|');
+}
+
+/* ============================== 素材预览 ============================== */
+let pvIdx=0;
+function pvShow(idx){
+  const media=state.content.media;
+  if(!media.length){ closeModal(); return; }
+  pvIdx=(idx+media.length)%media.length;
+  const m=media[pvIdx];
+  const mediaEl=m.kind==='video'
+    ?`<video class="pv-media" src="${m.url}" controls autoplay></video>`
+    :`<img class="pv-media" src="${m.url}" alt="${escAttr(m.name)}">`;
+  $('#modalBody').innerHTML=`<div class="pv-wrap">${mediaEl}</div>
+    <div class="pv-meta"><span class="pv-name" title="${escAttr(m.name)}">${esc(m.name)}</span>
+    <span class="pv-sub">${fmtSize(m.size)} · ${pvIdx+1}/${media.length} · 可用 ← → 切换</span></div>`;
+  $('#modalFoot').innerHTML=`<button class="btn ghost" id="pvPrev">上一张</button><button class="btn ghost" id="pvNext">下一张</button><button class="btn ghost" id="pvDel">删除这张</button><button class="btn primary" id="pvClose">关闭</button>`;
+  $('#pvPrev').onclick=()=>pvShow(pvIdx-1);
+  $('#pvNext').onclick=()=>pvShow(pvIdx+1);
+  $('#pvClose').onclick=()=>closeModal();
+  $('#pvDel').onclick=()=>{
+    const cur=state.content.media[pvIdx]; if(!cur) return;
+    state.content.media=state.content.media.filter(i=>i.id!==cur.id);
+    state.content.demoMedia=false;
+    IDB.del('media',cur.id);
+    clearJobs(); renderMedia(); renderMatrix(); renderHero();
+    if(!state.content.media.length){ closeModal(); return; }
+    pvShow(Math.min(pvIdx,state.content.media.length-1));
+  };
+}
+function openPreview(idx){
+  const media=state.content.media;
+  if(!media.length) return;
+  pvIdx=Math.max(0,Math.min(idx,media.length-1));
+  // 只有预览弹窗已开着时才原地切换，避免重复 openModal 造成页面滚动位置错乱
+  const isPvOpen=$('#modalBg').classList.contains('on')&&!!$('#modalBody .pv-wrap');
+  if(!isPvOpen) openModal('素材预览','点击缩略图查看大图，← → 键切换','','');
+  pvShow(pvIdx);
 }
 
 /* ============================== 校验 ============================== */
@@ -1181,7 +1329,7 @@ function openAccountPicker(){
 
 function openAccount(pid){
   const p=getPlatform(pid);
-  const acc=getAccount(pid)||{pid,handle:'',auth:p.api==='none'?'manual':'oauth',status:'unlinked',expiry:'',note:''};
+  const acc=getAccount(pid)||{pid,handle:'',auth:'manual',status:'unlinked',expiry:'',note:''};
   const locked=!!state.vault&&!state.vaultKey;
   const noVault=!state.vault;
   const saved=state.secrets&&state.secrets[pid];
@@ -1281,21 +1429,37 @@ function openVault(){
       if(a.length<8){ toast('密码太短','至少 8 位','err'); return; }
       if(a!==b){ toast('两次输入不一致','','err'); return; }
       $('#vCreate').disabled=true;
-      await createVault(a);
-      closeModal(); renderAll();
+      const ok=await createVault(a);
+      $('#vCreate').disabled=false;
+      if(ok){ closeModal(); renderAll(); }
     };
   }else{
+    const meta=state.vault.meta||{};
+    const fmtDT=ts=>new Date(ts).toLocaleString('zh-CN',{hour12:false});
+    const metaLine=meta.createdAt
+      ? `<div class="form-note">这个保险箱创建于 ${fmtDT(meta.createdAt)}${meta.lastUnlockedAt?'，上次成功解锁 '+fmtDT(meta.lastUnlockedAt):''}。如果时间和你印象中不符，说明它不是你最近设的那个，可点左下角「重置保险箱」重新开始。</div>`
+      : '';
     const body=`
       <div class="gate-box">输入主密码解锁保险箱，读取本机保存的授权凭据。连续输错不会锁定账号，但请确认环境安全。</div>
-      <div class="field"><label>主密码</label><div class="pass-wrap"><input class="inp" id="vPass" type="password" placeholder="输入主密码"></div></div>
-      <div class="form-note">解锁后 10 分钟内无操作会自动锁定（可在设置中调整）。</div>`;
-    const foot=`<button class="btn ghost" id="vCancel">取消</button><button class="btn primary" id="vUnlock">解锁</button>`;
+      <div class="field"><label>主密码</label><div class="pass-wrap"><input class="inp" id="vPass" type="password" placeholder="输入主密码（建议切换到英文输入法）"><button type="button" class="eye" id="vEye">显示</button></div></div>
+      <div class="form-note">解锁后 10 分钟内无操作会自动锁定（可在设置中调整）。</div>
+      ${metaLine}`;
+    const foot=`<button class="btn danger" id="vReset" style="margin-right:auto">重置保险箱</button><button class="btn ghost" id="vCancel">取消</button><button class="btn primary" id="vUnlock">解锁</button>`;
     openModal('解锁保险箱','本机凭据 · 不出设备',body,foot);
     $('#vCancel').onclick=closeModal;
+    $('#vEye').onclick=()=>{
+      const inp=$('#vPass'); const show=inp.type==='password';
+      inp.type=show?'text':'password'; $('#vEye').textContent=show?'隐藏':'显示';
+    };
     $('#vUnlock').onclick=async()=>{
       const pass=$('#vPass').value;
       if(!pass){ toast('请输入主密码','','warn'); return; }
       try{ await unlockVault(pass); closeModal(); renderAll(); }catch(e){}
+    };
+    $('#vReset').onclick=()=>{
+      if(confirm('重置将清空保险箱内已保存的所有 Token/Secret，且无法恢复。确定重置吗？')){
+        resetVault(); closeModal(); openVault();
+      }
     };
     $('#vPass').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#vUnlock').click(); });
   }
@@ -1320,6 +1484,14 @@ function openSettings(){
       </div>
     </div>
     <label class="confirm-check" style="margin:4px 0 12px"><input type="checkbox" id="stDry" ${s.dryRun?'checked':''}> 默认开启演练模式（只校验，不提交）</label>
+    <div style="border-top:1px solid var(--line);padding-top:12px;margin-bottom:12px">
+      <div style="font-size:10.5px;color:var(--muted);margin-bottom:7px">实验性自动发布（可选）</div>
+      <label class="confirm-check" style="margin:0 0 7px"><input type="checkbox" id="stAuto" ${s.autoPublish?'checked':''}> 启用自动发布：用本机 Chrome / Edge 打开各平台创作中心，自动上传素材并填好文案</label>
+      <div class="warn-box" style="margin:0 0 8px">该方式通过模拟人工操作完成，<b>不符合各平台的机器发布条款</b>，存在被限流或封号的风险，建议先用一个新注册的小号试点。平台页面改版后可能失效。</div>
+      <label class="confirm-check" style="margin:0 0 9px"><input type="checkbox" id="stAutoSubmit" ${s.autoSubmit?'checked':''}> 允许自动点击「发布」按钮（默认只填表，最后一步留给你确认）</label>
+      <button class="btn mini" id="stWorkbench" type="button">打开自动发布工作台（首次登录用）</button>
+      <div class="inline-hint" style="margin-top:7px">工作台是一个独立浏览器窗口，登录态长期保留；不会读取你日常浏览器的 Cookie。</div>
+    </div>
     <div style="border-top:1px solid var(--line);padding-top:12px">
       <div style="font-size:10.5px;color:var(--muted);margin-bottom:7px">本地数据（不包含保险箱与 Token）</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap">
@@ -1342,10 +1514,18 @@ function openSettings(){
     state.settings.autoLock=Math.max(0,Math.min(120,Number($('#stLock').value)||0));
     state.settings.dryRun=$('#stDry').checked;
     state.settings.freeMode=free;
+    state.settings.autoPublish=$('#stAuto').checked;
+    state.settings.autoSubmit=$('#stAutoSubmit').checked;
     persistSettings(); closeModal(); syncSettingsUI(); renderAll();
-    toast('设置已保存',state.settings.freeMode?'零成本模式：不会调用平台 API':mode==='live'?'真实模式：请求将发往后端':'演示模式：不会发起请求','ok');
+    toast('设置已保存',state.settings.autoPublish?'自动发布已启用（'+(state.settings.autoSubmit?'自动提交':'仅自动填表')+'）':state.settings.freeMode?'零成本模式：不会调用平台 API':mode==='live'?'真实模式：请求将发往后端':'演示模式：不会发起请求','ok');
   };
   $('#stExport').onclick=exportData;
+  $('#stWorkbench').onclick=async ()=>{
+    const api=window.onecastAuto;
+    if(!api){ toast('自动发布不可用','当前环境不支持（只有桌面版可以驱动浏览器）','err'); return; }
+    const r=await api.openWorkbench();
+    toast(r.ok?'工作台已打开':'打开失败',r.message||'',r.ok?'ok':'err');
+  };
   $('#stImportBtn').onclick=()=>$('#stImport').click();
   $('#stImport').onchange=async e=>{
     const f=e.target.files[0]; if(!f) return;
@@ -1561,9 +1741,20 @@ function openFreeConfirm(pids){
     return {p,acc,v,detail};
   });
   const okCount=rows.filter(r=>r.v.ok).length;
+  const autoOn=!!(state.settings.autoPublish&&window.onecastAuto);
+  const execBlock=autoOn?`
+    <div class="field"><label>执行方式</label>
+      <select class="sel" id="freeExec">
+        <option value="fill">自动填表：自动传素材 + 填文案，发布由你点</option>
+        <option value="submit" ${state.settings.autoSubmit?'selected':''}>全自动：自动填写并尝试点击发布（风险更高）</option>
+        <option value="pack">半自动：只生成发布包，我手动去各平台发</option>
+      </select>
+    </div>
+    <div class="warn-box">自动方式会打开一个独立浏览器窗口操作各平台，<b>不符合平台机器发布条款</b>，请先用小号试点。微信与 Instagram 仍会退回半自动。</div>`:'';
   const body=`
-    <div class="gate-box"><b>零成本发布包 · ${okCount} / ${rows.length} 个平台可生成</b><br>不调用任何平台 API，不产生费用。本页会准备各平台文案与创作中心入口，发布动作由你在平台内确认。</div>
+    <div class="gate-box"><b>发布清单 · ${okCount} / ${rows.length} 个平台可执行</b><br>${autoOn?'自动发布已启用：将按下面选择的方式处理各平台。':'不调用任何平台 API，不产生费用。本页会准备各平台文案与创作中心入口，发布动作由你在平台内确认。'}</div>
     ${okCount===0?'<div class="warn-box err">选中的平台都没有通过校验，请先补充素材或文案。</div>':''}
+    ${execBlock}
     <div class="confirm-list">
       ${rows.map(r=>`<div class="confirm-row">
         ${platformMark(r.p)}
@@ -1571,14 +1762,24 @@ function openFreeConfirm(pids){
         <span class="vchip ${r.v.ok?(r.v.warnings.length?'warn':'ok'):'err'}">${r.v.ok?(r.v.warnings.length?'注意':'就绪'):'跳过'}</span>
       </div>`).join('')}
     </div>
-    <div class="warn-box">发布包只包含文案、平台入口和素材清单，不会自动上传文件，也不会自动点击发布。可直接使用各平台自带的定时发布。</div>
-    <label class="confirm-check"><input type="checkbox" id="freeConfirm"> 我了解：发布需要我在各平台手动确认，本操作不会产生 API 费用。</label>`;
+    ${autoOn?'':'<div class="warn-box">发布包只包含文案、平台入口和素材清单，不会自动上传文件，也不会自动点击发布。可直接使用各平台自带的定时发布。</div>'}
+    <label class="confirm-check"><input type="checkbox" id="freeConfirm"> ${autoOn?'我了解自动发布的风险，并确认使用自己的账号操作。':'我了解：发布需要我在各平台手动确认，本操作不会产生 API 费用。'}</label>`;
   const foot=`<button class="btn ghost" id="freeCancel">取消</button>
     <button class="btn primary" id="freeStart" disabled>生成发布包</button>`;
-  openModal('免费发布清单','零 API 费用 · 逐平台人工确认',body,foot);
+  openModal(autoOn?'发布确认':'免费发布清单',autoOn?'自动发布（实验性）· 可切换半自动':'零 API 费用 · 逐平台人工确认',body,foot);
   $('#freeCancel').onclick=closeModal;
   $('#freeConfirm').onchange=e=>{ $('#freeStart').disabled=!e.target.checked||okCount===0; };
-  $('#freeStart').onclick=()=>{ closeModal(); runFreePublish(pids); };
+  const syncLabel=()=>{
+    const v=$('#freeExec')?$('#freeExec').value:'pack';
+    $('#freeStart').textContent=v==='fill'?'开始自动填表':v==='submit'?'开始自动发布':'生成发布包';
+  };
+  if($('#freeExec')) $('#freeExec').onchange=syncLabel;
+  syncLabel();
+  $('#freeStart').onclick=()=>{
+    const v=$('#freeExec')?$('#freeExec').value:'pack';
+    closeModal();
+    if(v==='pack') runFreePublish(pids); else runAutoPublish(pids,v==='submit');
+  };
 }
 
 function runFreePublish(pids){
@@ -1594,6 +1795,61 @@ function runFreePublish(pids){
   openPackModal(ready);
   toast('发布包已生成',ready.length+' 个平台 · 零费用','ok');
 }
+
+/* 实验性自动发布：由主进程驱动本机 Chrome/Edge 完成上传与填表 */
+const AUTO_STAGE_MAP={
+  start:['running','排队中'], open:['running','打开创作中心'],
+  upload:['running','上传素材 / 填文案'], filled:['manual','已填好，待点发布'],
+  submitted:['success','已提交'], login:['manual','需先登录工作台'],
+  error:['blocked','自动化出错'], skip:['blocked','该平台不支持自动'], busy:['blocked','任务冲突']
+};
+async function runAutoPublish(pids, submit){
+  const api=window.onecastAuto;
+  if(!api){ toast('自动发布不可用','只有桌面版能驱动浏览器','err'); return; }
+  const ready=pids.filter(pid=>validatePlatform(pid).ok);
+  if(!ready.length){ toast('没有可执行的平台','请先修正校验问题','warn'); return; }
+
+  const media=state.content.media.filter(m=>m.url&&m.url.startsWith('data:'));
+  const missing=state.content.media.length-media.length;
+  if(state.content.media.length&&!media.length){
+    toast('素材无法传给平台','素材没有保存在本机素材库中，请重新上传一次','err');
+    return;
+  }
+  if(missing) toast('部分素材被跳过',missing+' 个素材不是本机保存格式，已跳过','warn');
+
+  const jobs=ready.map(pid=>({pid,content:effective(pid),files:media.map(m=>({name:m.name,dataUrl:m.url}))}));
+  state.running=true; state.jobs={};
+  ready.forEach(pid=>{ state.jobs[pid]={state:'running',text:'排队中'}; });
+  updatePublishButton(); renderMatrix(); renderHero();
+  toast(submit?'开始自动发布':'开始自动填表',ready.length+' 个平台 · 自动化窗口会被打开，请勿关闭','ok');
+
+  let res;
+  try{ res=await api.run({jobs,submit:!!submit}); }
+  catch(e){ res={ok:false,error:String(e.message||e)}; }
+  state.running=false; renderAll();
+  if(!res.ok) toast('自动发布失败',res.error||'未知错误','err');
+  const results=res.results||[];
+  const done=results.filter(r=>r.ok).length;
+  toast('自动发布结束',done+' / '+ready.length+' 个平台已处理，请在平台内确认','ok');
+  if(results.length) openAutoResult(results,submit);
+}
+
+function openAutoResult(results,submit){
+  const map={filled:'已填好（点发布）',submitted:'已提交',login:'需先登录',error:'出错',skip:'不支持自动'};
+  const body=`
+    <div class="gate-box">自动任务已结束。<b>${results.filter(r=>r.ok).length} 个成功</b>，${results.filter(r=>!r.ok).length} 个需处理。${submit?'已尝试提交的请到平台后台核对是否真的发出。':'填好内容的窗口已关闭，请在各平台重新打开创作中心完成发布。'}</div>
+    <div class="confirm-list">
+      ${results.map(r=>`<div class="confirm-row">
+        ${platformMark(getPlatform(r.pid))}
+        <span class="cnt"><b>${esc(getPlatform(r.pid).name)}</b><span>${esc(r.message||'')}</span></span>
+        <span class="vchip ${r.ok?'ok':'err'}">${map[r.stage]||r.stage}</span>
+      </div>`).join('')}
+    </div>
+    <div class="warn-box">若某平台停在「需先登录」：到设置 → 打开自动发布工作台，在窗口里登录该平台后再重试。失败截图保存在 %APPDATA%\\OneCast\\automation-logs\\。</div>`;
+  openModal('自动发布结果',submit?'自动提交 · 请核对结果':'仅自动填表 · 发布仍由你确认',body,'<button class="btn primary" data-close-auto>知道了</button>');
+  $('[data-close-auto]').onclick=closeModal;
+}
+
 
 function openPackModal(pids){
   const c=state.content;
@@ -1761,6 +2017,18 @@ function bindEvents(){
 
   $('#vaultPill').onclick=openVault;
   $('#btnSettings').onclick=openSettings;
+
+  // 自动发布进度：主进程逐个平台推送状态，这里同步到矩阵与日志
+  if(window.onecastAuto&&window.onecastAuto.onProgress){
+    window.onecastAuto.onProgress(d=>{
+      if(!d||!d.pid) return;
+      const m=AUTO_STAGE_MAP[d.stage]||['running',d.message||''];
+      state.jobs[d.pid]={state:m[0],text:((d.message||m[1])+'').slice(0,30)};
+      if(d.type==='result') addAudit(d.pid,m[0]==='success'?'success':m[0]==='manual'?'manual':'blocked',d.message||m[1]);
+      renderMatrix(); renderHero();
+    });
+  }
+
   $('#btnPrefill').onclick=()=>{ seedAccounts(true); renderAll(); };
   $('#btnAddAccount').onclick=openAccountPicker;
   $('#btnClearAudit').onclick=()=>{
@@ -1832,6 +2100,8 @@ function bindEvents(){
   $('#modalBg').addEventListener('click',e=>{ if(e.target===$('#modalBg')) closeModal(); });
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape') closeModal();
+    if(e.key==='ArrowLeft'&&$('#modalBody .pv-wrap')) pvShow(pvIdx-1);
+    if(e.key==='ArrowRight'&&$('#modalBody .pv-wrap')) pvShow(pvIdx+1);
     if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); if(!state.running) openPublishConfirm(); }
   });
 
@@ -1850,8 +2120,9 @@ function bindEvents(){
 }
 
 /* ============================== 初始化 ============================== */
-function init(){
+async function init(){
   loadLocal();
+  await loadMediaLibrary(); // 恢复上次保存的素材与封面（重启不丢）
   seedAccounts(false);
   $('#titleInput').value=state.content.title||'';
   $('#bodyInput').value=state.content.body||'';
@@ -1862,9 +2133,7 @@ function init(){
   bindEvents();
   syncSettingsUI();
   renderAll();
-  if(!state.vault){
-    setTimeout(()=>toast('建议先设置加密保险箱','右上角“未设置保险箱” → 设置主密码','warn'),900);
-  }
+  // 不再主动提醒设置保险箱：手动/零成本模式完全不需要它，只有要保存 Token 时才用得上
 }
 
 init();
