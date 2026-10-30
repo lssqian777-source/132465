@@ -1,7 +1,7 @@
 {
   "name": "onecast",
   "productName": "OneCast",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "OneCast - 自媒体多平台图文分发控制台",
   "main": "main.js",
   "author": "OneCast",

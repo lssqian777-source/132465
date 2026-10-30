@@ -1,16 +1,16 @@
-OneCast 1.0.7（Windows x64 便携版）
+OneCast 1.0.8（Windows x64 便携版）
 
 一、下载（需要先开代理）
 1. 先打开 F:\VPN\clash-verge.exe（连不上 GitHub 时必须开着它）
 2. 到 https://github.com/lssqian777-source/132465/releases 下载最新版：
-   OneCast-1.0.7-portable.exe（单个文件，约 72 MB）
+   OneCast-1.0.8-portable.exe（单个文件，约 72 MB）
 3. 建议放到桌面：把 exe 拖到桌面即可。它不用安装，双击就能跑。
 
 二、先解除「来自 Internet」锁定（重要，只需做一次）
 原因：从网上下载的文件会被 Windows 打上「来自 Internet」标记，双击时
       SmartScreen 会弹「Windows 已保护你的电脑」。这与代码签名无关，解除即可。
 
-  1. 右键 OneCast-1.0.7-portable.exe → 属性
+  1. 右键 OneCast-1.0.8-portable.exe → 属性
   2. 勾选底部的「解除锁定」→ 确定
   3. 再双击运行
 
@@ -18,7 +18,7 @@ OneCast 1.0.7（Windows x64 便携版）
   Windows 安全中心 → 应用和浏览器控制 → 智能应用控制设置 → 关闭
 
 三、运行
-1. 双击 OneCast-1.0.7-portable.exe，无需安装
+1. 双击 OneCast-1.0.8-portable.exe，无需安装
    （首次启动会在 %TEMP% 里解压一次，稍慢，属正常）
 2. 界面更新自动进行：开着 Clash 时软件会静默下载最新界面，下次打开自动生效，
    不会弹任何窗口。Clash 没开也能正常用，只是不更新界面。
@@ -51,7 +51,15 @@ OneCast 1.0.7（Windows x64 便携版）
   %APPDATA%\OneCast\automation-logs\，可据此判断卡在哪一步。
 - 自动发布违反部分平台的「机器发布」条款，请自行权衡，建议先用小号验证。
 
-七、数据存在哪里
+七、发布记录（每次发布自动留档）
+1. 右侧「发布记录」卡片：按时间倒序列出最近 5 次发布，圆点代表发到了哪些平台。
+2. 点任意一条 → 详情：看到当时的标题、正文、话题、素材数量和执行结果。
+3. 详情里点「复用此文案」→ 标题/正文/话题自动填回编辑区，改改就能再发。
+4. 点「全部」可查看最近 40 条并支持一键清空。
+5. 查重：如果标题+正文和 30 天内某次发布一模一样，发布会提示「与历史内容重复」。
+   记录存在本机 IndexedDB，换电脑或删 %APPDATA%\OneCast 会丢，不会上传到任何服务器。
+
+八、数据存在哪里
 账号、设置、审计日志、素材库、加密后的凭证都保存在本机
 %APPDATA%\OneCast\（含 browser-profile 与 automation-logs 两个子目录）。
 换文件夹 / 删掉 exe 不影响数据；彻底卸载就删除该文件夹，不留残余。

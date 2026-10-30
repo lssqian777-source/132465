@@ -36,11 +36,11 @@ const ADAPTERS = {
   },
   bilibili: {
     name: 'B 站',
-    url: 'https://t.bilibili.com/publish',
-    prepare: [],
+    url: 'https://member.bilibili.com/platform/upload/article/video',
+    prepare: ['投稿', '图文'],
     submit: ['发布', '发送'],
     titleInput: null,
-    note: '图文走「动态」，视频走投稿页；动态正文上限较低'
+    note: '视频投稿走这个页；图文动态走 t.bilibili.com（反爬严格），建议只用来传视频'
   },
   weibo: {
     name: '微博',

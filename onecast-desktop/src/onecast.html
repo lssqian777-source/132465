@@ -256,6 +256,13 @@ video.pv-media{background:#000}
 .audit-row .time{color:var(--dim);font-variant-numeric:tabular-nums;flex-shrink:0;font-size:9.5px}
 .audit-row .who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .audit-empty{font-size:10.5px;color:var(--dim);text-align:center;padding:14px 0}
+.hist-row{display:flex;align-items:center;gap:7px;padding:7px 2px;border-bottom:1px dashed var(--line);font-size:10px;color:var(--muted);cursor:pointer}
+.hist-row:hover{color:var(--txt)}
+.hist-row:last-child{border-bottom:none}
+.hist-row .time{color:var(--dim);font-variant-numeric:tabular-nums;flex-shrink:0;font-size:9.5px}
+.hist-row .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-row .pf{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.hist-row .hd{width:6px;height:6px;border-radius:50%;display:inline-block}
 .tagline{font-size:9.5px;color:var(--dim);line-height:1.7;margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}
 
 /* action bar */
@@ -578,6 +585,14 @@ video.pv-media{background:#000}
 
     <section class="card card-pad">
       <div class="card-head">
+        <div class="card-title"><span class="line"></span>发布记录</div>
+        <button class="btn mini" id="btnHistoryAll">全部 <b id="historyCnt">0</b></button>
+      </div>
+      <div class="hist-list" id="histList"></div>
+    </section>
+
+    <section class="card card-pad">
+      <div class="card-head">
         <div class="card-title"><span class="line"></span>最近操作</div>
         <button class="btn mini" id="btnClearAudit">清空</button>
       </div>
@@ -669,7 +684,7 @@ const LS = {
 const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10,freeMode:true,autoPublish:false,autoSubmit:false};
 
 const state = {
-  accounts:[], settings:{...DEFAULT_SETTINGS}, audit:[], hashes:[],
+  accounts:[], settings:{...DEFAULT_SETTINGS}, audit:[], hashes:[], history:[],
   content:{title:'',body:'',tags:'',visibility:'public',media:[],cover:null,demoMedia:false},
   overrides:{}, selected:new Set(PLATFORMS.map(p=>p.id)), expanded:new Set(),
   jobs:{}, vault:null, vaultKey:null, secrets:null, running:false, lastActive:Date.now()
@@ -937,10 +952,11 @@ const IDB={
   open(){ return new Promise(res=>{
     if(typeof indexedDB==='undefined'){ res(false); return; }
     let req;
-    try{ req=indexedDB.open('onecast-media',1); }catch(e){ res(false); return; }
+    try{ req=indexedDB.open('onecast-media',2); }catch(e){ res(false); return; }
     req.onupgradeneeded=()=>{ const db=req.result;
       if(!db.objectStoreNames.contains('media')) db.createObjectStore('media',{keyPath:'id'});
-      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); };
+      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'});
+      if(!db.objectStoreNames.contains('history')) db.createObjectStore('history',{keyPath:'id'}); };
     req.onsuccess=()=>{ IDB.db=req.result; IDB.usable=true; res(true); };
     req.onerror=()=>res(false);
     req.onblocked=()=>res(false);
@@ -1785,6 +1801,8 @@ function openFreeConfirm(pids){
 function runFreePublish(pids){
   const ready=pids.filter(pid=>validatePlatform(pid).ok);
   if(!ready.length){ toast('没有可生成的平台','请先修正校验问题','warn'); return; }
+  const dup=findDuplicate(state.content.title,state.content.body);
+  if(dup) toast('与历史内容重复',histTime(dup.ts)+' 已发过相同文案，确认要再发一次吗','warn');
   state.running=true; state.jobs={}; updatePublishButton();
   ready.forEach(pid=>{
     state.jobs[pid]={state:'manual',text:'待人工发布'};
@@ -1792,6 +1810,7 @@ function runFreePublish(pids){
   });
   state.running=false; updatePublishButton();
   renderMatrix(); renderHero();
+  recordPublish({mode:'pack',platforms:ready,status:'发布包已生成，待人工发布'});
   openPackModal(ready);
   toast('发布包已生成',ready.length+' 个平台 · 零费用','ok');
 }
@@ -1816,6 +1835,8 @@ async function runAutoPublish(pids, submit){
     return;
   }
   if(missing) toast('部分素材被跳过',missing+' 个素材不是本机保存格式，已跳过','warn');
+  const dup=findDuplicate(state.content.title,state.content.body);
+  if(dup) toast('与历史内容重复',histTime(dup.ts)+' 已发过相同文案，确认要再发一次吗','warn');
 
   const jobs=ready.map(pid=>({pid,content:effective(pid),files:media.map(m=>({name:m.name,dataUrl:m.url}))}));
   state.running=true; state.jobs={};
@@ -1831,6 +1852,7 @@ async function runAutoPublish(pids, submit){
   const results=res.results||[];
   const done=results.filter(r=>r.ok).length;
   toast('自动发布结束',done+' / '+ready.length+' 个平台已处理，请在平台内确认','ok');
+  recordPublish({mode:submit?'submit':'fill',platforms:ready,status:done+' / '+ready.length+' 已处理'});
   if(results.length) openAutoResult(results,submit);
 }
 
@@ -1950,6 +1972,7 @@ async function runPublish(pids){
   if(manual) parts.push(manual+' 待人工');
   if(blocked) parts.push(blocked+' 已拦截');
   if(failed) parts.push(failed+' 失败');
+  recordPublish({mode:dry?'dryrun':'live',platforms:pids,status:`成功 ${success} · 待人工 ${manual} · 拦截 ${blocked} · 失败 ${failed}`});
   toast(dry?'演练完成':'发布流程完成',parts.join(' · ')||'无结果',failed||blocked?'warn':'ok');
 }
 
@@ -1957,6 +1980,123 @@ function addAudit(pid,result,text){
   state.audit.unshift({ts:Date.now(),pid,result,text:text||''});
   if(state.audit.length>80) state.audit.length=80;
   persistAudit(); renderAudit();
+}
+
+/* ============================== 发布记录（历史归档）============================== */
+// 每次发布后写入 IndexedDB：时间、平台、文案快照、素材数量与执行结果。
+// 用途：下次写文案时对照历史（查重提示 + 一键复用旧文案）。
+async function loadHistory(){
+  if(!IDB.usable) return;
+  state.history=((await IDB.all('history'))||[]).sort((a,b)=>b.ts-a.ts);
+}
+
+function histTitle(r){ return r.title||String(r.body||'').slice(0,40)||'（无文案）'; }
+function histTime(ts){
+  const d=new Date(ts);
+  return String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+fmtTime(ts);
+}
+
+/** 30 天内是否有同标题同正文的记录 */
+function findDuplicate(title,body){
+  const norm=s=>String(s||'').replace(/\s+/g,'').toLowerCase();
+  const t=norm(title), b=norm(body);
+  if(!t&&!b) return null;
+  const within=30*86400000, now=Date.now();
+  return state.history.find(r=>now-r.ts<=within&&norm(r.title)===t&&norm(r.body)===b)||null;
+}
+
+async function recordPublish(entry){
+  const c=state.content;
+  const rec={
+    id:uid(), ts:Date.now(),
+    title:String(c.title||''), body:String(c.body||''), tags:String(c.tags||''),
+    platforms:entry.platforms||[], mode:entry.mode||'pack', status:entry.status||'',
+    mediaIds:(c.media||[]).map(m=>m.id), mediaCount:(c.media||[]).length,
+    cover:c.cover?c.cover.name:''
+  };
+  state.history.unshift(rec);
+  if(state.history.length>200) state.history.length=200;
+  if(IDB.usable) await IDB.put('history',rec);
+  renderHistory();
+}
+
+function histDots(platforms){
+  return (platforms||[]).map(pid=>{
+    const p=getPlatform(pid);
+    return p?`<span class="hd" style="background:linear-gradient(135deg,${p.brand[0]},${p.brand[1]})" title="${esc(p.name)}"></span>`:'';
+  }).join('');
+}
+
+function renderHistory(){
+  const wrap=$('#histList'); if(!wrap) return;
+  const cnt=$('#historyCnt'); if(cnt) cnt.textContent=state.history.length;
+  if(!state.history.length){
+    wrap.innerHTML='<div class="audit-empty">还没有发布记录</div>';
+    return;
+  }
+  wrap.innerHTML=state.history.slice(0,5).map(r=>`<div class="hist-row" data-hist="${r.id}">
+      <span class="time">${histTime(r.ts)}</span>
+      <span class="t">${esc(histTitle(r)).slice(0,60)}</span>
+      <span class="pf">${histDots(r.platforms)}</span>
+    </div>`).join('');
+  $$('[data-hist]',wrap).forEach(el=>{ el.onclick=()=>openHistoryDetail(el.dataset.hist); });
+}
+
+function openHistoryDetail(id){
+  const r=state.history.find(x=>x.id===id); if(!r) return;
+  const modeLabel={pack:'发布包（手动）',fill:'自动填表',submit:'自动提交',dryrun:'演练',live:'后端提交'}[r.mode]||r.mode;
+  const body=`
+    <div class="gate-box"><b>${esc(histTitle(r))}</b><br>${esc(histTime(r.ts))} · ${esc(modeLabel)} · ${r.mediaCount} 个素材${r.cover?' · 封面 '+esc(r.cover):''}</div>
+    <div class="pack-media" style="margin-top:10px"><b style="color:var(--txt)">平台</b><br>${(r.platforms||[]).map(pid=>esc((getPlatform(pid)||{}).name||pid)).join('、')||'未记录'}</div>
+    ${r.body?`<div class="pack-media" style="margin-top:10px"><b style="color:var(--txt)">正文</b><br>${esc(r.body).slice(0,800)}</div>`:''}
+    ${r.tags?`<div class="pack-media" style="margin-top:10px"><b style="color:var(--txt)">话题</b><br>${esc(r.tags)}</div>`:''}
+    ${r.status?`<div class="warn-box">${esc(r.status)}</div>`:''}`;
+  openModal('发布记录','对照历史，避免重复内容',body,
+    '<button class="btn ghost" data-hist-del>删除</button><button class="btn primary" data-hist-reuse>复用此文案</button>');
+  $('[data-hist-reuse]').onclick=()=>reuseRecord(r);
+  $('[data-hist-del]').onclick=()=>deleteRecord(r.id);
+}
+
+function reuseRecord(r){
+  state.content.title=r.title||''; state.content.body=r.body||''; state.content.tags=r.tags||'';
+  $('#titleInput').value=state.content.title;
+  $('#bodyInput').value=state.content.body;
+  $('#tagsInput').value=state.content.tags;
+  updateCounters();
+  const missing=(r.mediaIds||[]).filter(id=>!(state.content.media||[]).some(m=>m.id===id)).length;
+  closeModal();
+  toast('已复用旧文案',missing?missing+' 个素材已从素材库移除，请重新添加':'标题、正文、话题已填入，可直接修改后发布',missing?'warn':'ok');
+}
+
+async function deleteRecord(id){
+  state.history=state.history.filter(x=>x.id!==id);
+  if(IDB.usable) await IDB.del('history',id);
+  closeModal(); renderHistory(); toast('记录已删除','','ok');
+}
+
+function openHistoryAll(){
+  if(!state.history.length){ toast('还没有发布记录','发布一次后会自动记录','warn'); return; }
+  const rows=state.history.slice(0,40).map(r=>`<div class="hist-row" data-hist-open="${r.id}">
+      <span class="time">${histTime(r.ts)}</span>
+      <span class="t">${esc(histTitle(r)).slice(0,80)}</span>
+      <span class="pf">${histDots(r.platforms)}</span>
+    </div>`).join('');
+  openModal('全部发布记录','共 '+state.history.length+' 条 · 点击查看或复用',
+    '<div class="hist-list">'+rows+'</div>',
+    '<button class="btn ghost" data-hist-clear>清空全部</button><button class="btn primary" data-hist-close>关闭</button>');
+  $$('[data-hist-open]').forEach(el=>{ el.onclick=()=>openHistoryDetail(el.dataset.histOpen); });
+  $('[data-hist-close]').onclick=closeModal;
+  $('[data-hist-clear]').onclick=async ()=>{
+    state.history=[];
+    if(IDB.usable){
+      await new Promise(res=>{
+        const t=IDB.db.transaction('history','readwrite');
+        t.objectStore('history').clear();
+        t.oncomplete=res; t.onerror=res;
+      });
+    }
+    closeModal(); renderHistory(); toast('发布记录已清空','','ok');
+  };
 }
 
 /* ============================== UI 同步 ============================== */
@@ -1996,6 +2136,7 @@ function scheduleMatrix(){
 function renderAll(){
   renderAccounts(); renderCap(); renderAudit(); renderSafety(); renderHero();
   renderVaultPill(); renderMedia(); renderMatrix(); syncSettingsUI(); updatePublishButton();
+  renderHistory();
 }
 
 /* ============================== 事件绑定 ============================== */
@@ -2091,6 +2232,7 @@ function bindEvents(){
     toast(state.settings.freeMode?'零成本模式已开启':'已关闭零成本模式',state.settings.freeMode?'只生成发布包，不调用平台 API':'如需真实提交，请在设置中配置后端并确认演练状态',state.settings.freeMode?'ok':'warn');
   };
   $('#btnPublish').onclick=openPublishConfirm;
+  $('#btnHistoryAll').onclick=openHistoryAll;
   $('#btnSaveDraft').onclick=()=>{
     persistContent(); persistAccounts();
     toast('草稿已保存','文案与平台适配已写入本机','ok');
@@ -2123,6 +2265,7 @@ function bindEvents(){
 async function init(){
   loadLocal();
   await loadMediaLibrary(); // 恢复上次保存的素材与封面（重启不丢）
+  await loadHistory();      // 恢复发布记录（时间 + 文案快照）
   seedAccounts(false);
   $('#titleInput').value=state.content.title||'';
   $('#bodyInput').value=state.content.body||'';
