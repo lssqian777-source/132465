@@ -8,6 +8,8 @@ onecast-desktop/release/
 # 签名私钥（绝不入库：泄露即可伪造可通过验签的热更新）
 .onecast-sign.key
 onecast-desktop/.signkey.pem
+/*.pem
+/OneCast-签名密钥备份*
 
 # 临时截图
 .screenshots/.tmp/
