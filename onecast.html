@@ -335,6 +335,14 @@ video.pv-media{background:#000}
 .pass-wrap .inp{padding-right:36px}
 .eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:10px;padding:3px}
 .form-note{font-size:10.5px;color:var(--dim);line-height:1.7;margin-top:8px}
+/* 应用内确认框（替代原生 confirm：原生模态对话框会打断窗口焦点） */
+.cfm-bg{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;padding:18px;
+  background:rgba(3,4,8,.62);animation:fadeIn .15s ease-out}
+.cfm{width:min(420px,92vw);background:#151824;border:1px solid var(--line2);border-radius:14px;
+  box-shadow:0 24px 70px rgba(0,0,0,.6);padding:18px;animation:pop .18s var(--ease)}
+.cfm h4{font-size:14.5px;font-weight:700;margin-bottom:6px}
+.cfm p{font-size:12px;color:var(--muted);line-height:1.65}
+.cfm-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 .radio-row{display:flex;gap:6px;flex-wrap:wrap}
 .radio-row label{font-size:11px;color:var(--muted);border:1px solid var(--line);background:#0b0d14;
   padding:6px 10px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:.15s}
@@ -1374,6 +1382,41 @@ function closeModal(){
   unlockPageScroll();
 }
 
+// 应用内确认框：不用原生 confirm()。Electron 的原生模态对话框关闭后会打断窗口焦点，
+// 导致紧接着出现的输入框点不动（典型场景：重置保险箱 → 创建表单无法点击）。
+function askConfirm(opt={}){
+  const {title='确认操作',text='',okText='确定',danger=true}=opt;
+  return new Promise(resolve=>{
+    const prev=document.activeElement;
+    const bg=document.createElement('div');
+    bg.className='cfm-bg';
+    bg.innerHTML=`<div class="cfm" role="dialog" aria-modal="true">
+      <h4>${esc(title)}</h4><p>${esc(text)}</p>
+      <div class="cfm-foot">
+        <button class="btn ghost" data-cfm="0">取消</button>
+        <button class="btn ${danger?'danger':'primary'}" data-cfm="1">${esc(okText)}</button>
+      </div></div>`;
+    const done=v=>{
+      document.removeEventListener('keydown',onKey,true);
+      bg.remove();
+      if(prev&&prev.isConnected&&typeof prev.focus==='function') prev.focus();
+      resolve(v);
+    };
+    const onKey=e=>{
+      if(e.key==='Escape'){ e.stopImmediatePropagation(); e.preventDefault(); done(false); }
+      else if(e.key==='Enter'){ e.stopImmediatePropagation(); e.preventDefault(); done(true); }
+    };
+    bg.addEventListener('click',e=>{
+      const b=e.target.closest('[data-cfm]');
+      if(b) done(b.dataset.cfm==='1');
+      else if(e.target===bg) done(false);
+    });
+    document.addEventListener('keydown',onKey,true);
+    document.body.appendChild(bg);
+    bg.querySelector('[data-cfm="1"]').focus();
+  });
+}
+
 /* ============================== 账号弹窗 ============================== */
 function openAccountPicker(){
   const body=`<div class="gate-box">选择一个平台，填写账号与授权信息。预填不会连接平台，也不会发送任何请求。</div>
@@ -1462,7 +1505,7 @@ function openAccount(pid){
     else toast('连接正常','已模拟校验授权信息（未发起真实请求）','ok');
   };
   if($('#acDelete')) $('#acDelete').onclick=async()=>{
-    if(!confirm('删除该账号及其本地凭据？')) return;
+    if(!(await askConfirm({title:'删除账号',text:'删除该账号及其本地凭据？',okText:'删除'}))) return;
     state.accounts=state.accounts.filter(a=>a.pid!==pid);
     if(state.secrets){ delete state.secrets[pid]; await persistSecrets(); }
     persistAccounts(); closeModal(); renderAll();
@@ -1514,10 +1557,9 @@ function openVault(){
       if(!pass){ toast('请输入主密码','','warn'); return; }
       try{ await unlockVault(pass); closeModal(); renderAll(); }catch(e){}
     };
-    $('#vReset').onclick=()=>{
-      if(confirm('重置将清空保险箱内已保存的所有 Token/Secret，且无法恢复。确定重置吗？')){
-        resetVault(); closeModal(); openVault();
-      }
+    $('#vReset').onclick=async()=>{
+      if(!(await askConfirm({title:'重置保险箱',text:'重置将清空保险箱内已保存的所有 Token / Secret，且无法恢复。',okText:'重置'}))) return;
+      resetVault(); closeModal(); openVault();
     };
     $('#vPass').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#vUnlock').click(); });
   }
@@ -1605,8 +1647,8 @@ function openSettings(){
       toast('配置已导入','保险箱与 Token 不会被导入','ok');
     }catch(err){ toast('导入失败','JSON 格式不正确','err'); }
   };
-  $('#stClear').onclick=()=>{
-    if(!confirm('清除本机账号、草稿、审计与保险箱？此操作不可恢复。')) return;
+  $('#stClear').onclick=async()=>{
+    if(!(await askConfirm({title:'清除本机数据',text:'清除本机账号、草稿、审计与保险箱？此操作不可恢复。',okText:'全部清除'}))) return;
     Object.values(LS).forEach(k=>localStorage.removeItem(k));
     location.reload();
   };
@@ -2214,9 +2256,9 @@ function bindEvents(){
 
   $('#btnPrefill').onclick=()=>{ seedAccounts(true); renderAll(); };
   $('#btnAddAccount').onclick=openAccountPicker;
-  $('#btnClearAudit').onclick=()=>{
+  $('#btnClearAudit').onclick=async()=>{
     if(!state.audit.length) return;
-    if(!confirm('清空最近操作记录？')) return;
+    if(!(await askConfirm({title:'清空操作记录',text:'清空最近操作记录？',okText:'清空'}))) return;
     state.audit=[]; persistAudit(); renderAudit(); renderHero();
   };
   $$('[data-guide]').forEach(b=>b.onclick=openGuide);
