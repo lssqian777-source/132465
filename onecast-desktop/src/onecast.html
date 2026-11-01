@@ -123,7 +123,9 @@ a:hover{text-decoration:underline}
   padding:22px 14px;text-align:center;transition:.22s var(--ease);overflow:hidden}
 .dropzone:hover,.dropzone.drag{border-color:rgba(109,140,255,.75);background:rgba(109,140,255,.09)}
 .dropzone.drag{transform:scale(1.008);box-shadow:0 0 0 4px rgba(109,140,255,.1),inset 0 0 40px rgba(109,140,255,.05)}
-.dropzone input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;z-index:2}
+.dropzone input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.dropzone{cursor:pointer}
+.dropzone .btn{cursor:pointer}
 .dz-ico{width:38px;height:38px;border-radius:11px;margin:0 auto 9px;display:grid;place-items:center;
   background:rgba(109,140,255,.12);color:var(--accent);transition:.22s}
 .dropzone:hover .dz-ico,.dropzone.drag .dz-ico{transform:translateY(-2px);background:rgba(109,140,255,.18)}
@@ -133,9 +135,12 @@ a:hover{text-decoration:underline}
 .dz-actions{display:flex;gap:6px;justify-content:center;margin-top:12px;position:relative;z-index:3}
 
 .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(94px,1fr));gap:8px;margin-top:11px}
-.m-item{position:relative;border-radius:9px;overflow:hidden;background:#0b0d14;border:1px solid var(--line);aspect-ratio:1;cursor:pointer;
-  transition:border-color .16s,transform .16s var(--ease),box-shadow .16s}
+.m-item{position:relative;border-radius:9px;overflow:hidden;background:#0b0d14;border:1px solid var(--line);aspect-ratio:1;cursor:grab;
+  transition:border-color .16s,transform .16s var(--ease),box-shadow .16s,opacity .16s}
 .m-item:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.4)}
+.m-item.drag-src{opacity:.4}
+.m-item.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent),0 8px 20px rgba(0,0,0,.4)}
+.m-item.drag-over::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
 .m-item img{width:100%;height:100%;object-fit:cover;display:block}
 .pv-wrap{display:flex;justify-content:center;align-items:center;background:#07080c;border:1px solid var(--line);border-radius:10px;padding:10px;min-height:200px}
 .pv-media{max-width:100%;max-height:56vh;object-fit:contain;border-radius:8px;display:block}
@@ -161,7 +166,7 @@ video.pv-media{background:#000}
   display:grid;place-items:center;font-size:9.5px;color:var(--dim);overflow:hidden;position:relative;flex-shrink:0;transition:.15s}
 .cover-box:hover{border-color:var(--accent);color:var(--accent)}
 .cover-box img{width:100%;height:100%;object-fit:cover}
-.cover-box input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.cover-box input{position:absolute;inset:0;opacity:0;pointer-events:none}
 .cover-txt{font-size:11px;color:var(--dim);line-height:1.6}
 .cover-txt b{color:var(--muted);font-weight:600}
 
@@ -739,6 +744,7 @@ const state = {
   overrides:{}, selected:new Set(PLATFORMS.map(p=>p.id)), expanded:new Set(),
   jobs:{}, vault:null, vaultKey:null, secrets:null, running:false, lastActive:Date.now()
 };
+let dragMediaIdx = -1; // 素材拖拽排序时记录被拖动项的索引
 
 const $ = (s,root=document)=>root.querySelector(s);
 const $$ = (s,root=document)=>[...root.querySelectorAll(s)];
@@ -1048,8 +1054,9 @@ function renderMedia(){
     const idx=media.indexOf(m);
     const d=document.createElement('div');
     d.className='m-item';
-    d.title='点击预览';
-    d.onclick=()=>openPreview(idx);
+    d.draggable=true;
+    d.title='点击预览 · 拖拽排序';
+    d.onclick=()=>{ if(d.dataset.justDragged){ delete d.dataset.justDragged; return; } openPreview(idx); };
     if(m.kind==='image'&&m.url){
       d.innerHTML=`<img src="${m.url}" alt="${escAttr(m.name)}"><div class="m-name">${esc(m.name)}</div>`;
     }else if(m.kind==='image'){
@@ -1057,6 +1064,36 @@ function renderMedia(){
     }else{
       d.innerHTML=`<div class="m-video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m10 8 6 4-6 4z"/><circle cx="12" cy="12" r="9"/></svg><span>${fmtSize(m.size)}</span></div><div class="m-name">${esc(m.name)}</div>`;
     }
+    // 拖拽排序
+    d.addEventListener('dragstart',e=>{
+      if(e.target.closest('.m-x')){ e.preventDefault(); return; } // 点删除按钮不触发排序
+      dragMediaIdx=idx;
+      d.classList.add('drag-src');
+      e.dataTransfer.effectAllowed='move';
+      try{ e.dataTransfer.setData('text/plain',String(idx)); }catch(_){}
+    });
+    d.addEventListener('dragover',e=>{
+      e.preventDefault(); e.dataTransfer.dropEffect='move';
+      if(dragMediaIdx!==idx) d.classList.add('drag-over');
+    });
+    d.addEventListener('dragleave',()=>d.classList.remove('drag-over'));
+    d.addEventListener('drop',e=>{
+      e.preventDefault(); e.stopPropagation();
+      d.classList.remove('drag-over');
+      const from=dragMediaIdx; dragMediaIdx=-1;
+      if(from<0||from===idx) return;
+      const arr=state.content.media;
+      const [moved]=arr.splice(from,1);
+      arr.splice(idx,0,moved);
+      state.content.demoMedia=false;
+      persistContent(); clearJobs(); renderMedia(); renderMatrix(); renderHero();
+    });
+    d.addEventListener('dragend',()=>{
+      dragMediaIdx=-1;
+      d.classList.remove('drag-src');
+      d.dataset.justDragged='1';
+      document.querySelectorAll('.m-item.drag-over').forEach(el=>el.classList.remove('drag-over'));
+    });
     const x=document.createElement('button');
     x.className='m-x'; x.textContent='×'; x.title='移除';
     x.onclick=(e)=>{ e.stopPropagation();
@@ -2266,10 +2303,28 @@ function bindEvents(){
   $('#fileInput').onchange=e=>{ addFiles(e.target.files); e.target.value=''; };
   $('#btnPick').onclick=e=>{ e.preventDefault(); e.stopPropagation(); $('#fileInput').click(); };
   $('#btnSample').onclick=e=>{ e.preventDefault(); e.stopPropagation(); addSampleMedia(); };
+  // 全局阻止文件拖入窗口时的默认导航（Electron 会把拖入的文件当链接打开，覆盖整个应用）
+  ['dragover','drop'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault()));
   const dz=$('#dropzone');
-  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.add('drag'); }));
-  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.remove('drag'); }));
-  dz.addEventListener('drop',e=>{ if(e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+  dz.onclick=e=>{ if(e.target.closest('button')) return; $('#fileInput').click(); };
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{
+    e.preventDefault(); e.dataTransfer.dropEffect='copy'; dz.classList.add('drag');
+  }));
+  dz.addEventListener('dragleave',e=>{
+    // 只有真正离开 dropzone 时才去掉高亮（避免在子元素间移动时闪烁）
+    const r=dz.getBoundingClientRect();
+    if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom) dz.classList.remove('drag');
+  });
+  dz.addEventListener('drop',e=>{
+    e.preventDefault(); dz.classList.remove('drag');
+    if(e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  });
+  const cbox=document.querySelector('.cover-box');
+  if(cbox){
+    cbox.onclick=()=>$('#coverInput').click();
+    ['dragenter','dragover'].forEach(ev=>cbox.addEventListener(ev,e=>{ e.preventDefault(); e.dataTransfer.dropEffect='copy'; }));
+    cbox.addEventListener('drop',e=>{ e.preventDefault(); if(e.dataTransfer.files[0]) setCover(e.dataTransfer.files[0]); });
+  }
   $('#coverInput').onchange=e=>{ setCover(e.target.files[0]); e.target.value=''; };
   $('#btnClearCover').onclick=()=>{ state.content.cover=null; renderMedia(); };
 
