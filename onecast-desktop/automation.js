@@ -8,9 +8,9 @@
  * 重要说明：
  * - 不读取、不复制你日常浏览器的 Cookie 和密码，登录需要在该工作台里单独完成一次。
  * - 默认只「自动填表」（上传素材 + 填标题正文），最后一步由你人工点击发布。
- *   只有显式开启 submit 才会尝试点击发布按钮。
- * - 平台页面随时可能改版，本引擎按文本/结构做启发式匹配，失败时会保留截图与日志，
- *   存放在 %APPDATA%/OneCast/automation-logs/ 便于排查。
+ * - 填完的标签页会保持打开，你可以直接在那个窗口里核对并点发布。
+ * - 平台页面随时可能改版，本引擎按文本/结构做启发式匹配；每填一项都会回读校验，
+ *   没填进去会如实返回，失败时保留截图在 %APPDATA%/OneCast/automation-logs/。
  */
 const { chromium } = require('playwright-core');
 const fs = require('node:fs');
@@ -21,63 +21,91 @@ const ADAPTERS = {
   douyin: {
     name: '抖音',
     url: 'https://creator.douyin.com/creator-micro/content/upload',
-    prepare: ['发布图文', '图文'],
+    host: 'douyin.com',
+    imageTab: ['发布图文', '图文'],
+    videoTab: ['发布视频', '视频'],
+    titleSelectors: ['input[placeholder*="标题"]', 'input[placeholder*="作品"]'],
+    bodySelectors: ['div[contenteditable="true"]', 'textarea[placeholder*="简介"]'],
     submit: ['发布', '立即发布'],
-    titleInput: 'input[placeholder*="标题"], input[placeholder*="填写"]',
     note: '图文最多 35 张；封面在发布页单独设置'
   },
   xiaohongshu: {
     name: '小红书',
     url: 'https://creator.xiaohongshu.com/publish/publish?source=official',
-    prepare: ['上传图文', '图文'],
+    host: 'xiaohongshu.com',
+    imageTab: ['上传图文', '图文'],
+    videoTab: ['上传视频', '视频'],
+    titleSelectors: ['input[placeholder*="标题"]', 'div[contenteditable="true"][data-placeholder*="标题"]'],
+    bodySelectors: ['div[contenteditable="true"][data-placeholder*="正文"]', 'div[contenteditable="true"]'],
     submit: ['发布', '发布笔记'],
-    titleInput: 'input[placeholder*="标题"]',
     note: '标题上限 20 字；正文里的话题用 #话题# 形式'
   },
   bilibili: {
     name: 'B 站',
     url: 'https://member.bilibili.com/platform/upload/article/video',
-    prepare: ['投稿', '图文'],
+    host: 'bilibili.com',
+    imageTab: ['图文', '专栏'],
+    videoTab: ['视频', '投稿'],
+    titleSelectors: ['input[placeholder*="标题"]', 'input[class*="title"]'],
+    bodySelectors: ['div[contenteditable="true"]', 'textarea'],
     submit: ['发布', '发送'],
-    titleInput: null,
     note: '视频投稿走这个页；图文动态走 t.bilibili.com（反爬严格），建议只用来传视频'
   },
   weibo: {
     name: '微博',
     url: 'https://weibo.com/compose',
-    prepare: [],
+    host: 'weibo.com',
+    imageTab: [],
+    videoTab: [],
+    titleSelectors: [],
+    bodySelectors: ['div[contenteditable="true"]', 'textarea'],
     submit: ['发送', '发布'],
-    titleInput: null,
     note: '正文 140 字；图片最多 9 张'
   },
   x: {
     name: 'X',
     url: 'https://x.com/compose/post',
-    prepare: [],
+    host: 'x.com',
+    imageTab: [],
+    videoTab: [],
+    titleSelectors: [],
+    bodySelectors: ['div[contenteditable="true"]', 'textarea'],
     submit: ['Post', '发布'],
-    titleInput: null,
     note: '280 字符；图片最多 4 张'
   },
   instagram: {
     name: 'Instagram',
     url: 'https://www.instagram.com/',
-    prepare: [],
+    host: 'instagram.com',
+    manual: true,
+    imageTab: [],
+    videoTab: [],
+    titleSelectors: [],
+    bodySelectors: [],
     submit: ['Share', '分享'],
-    titleInput: null,
-    note: '网页版发布能力有限，建议手动'
+    note: '网页版发文不稳定，请手动发布'
   },
   wechat: {
     name: '微信（视频号/贴图）',
     url: 'https://channels.weixin.qq.com/platform/post/create',
-    prepare: [],
+    host: 'weixin.qq.com',
+    manual: true,
+    imageTab: [],
+    videoTab: [],
+    titleSelectors: [],
+    bodySelectors: [],
     submit: [],
-    titleInput: null,
     note: '视频号/朋友圈没有可用的网页发布接口，只能手动'
   }
 };
 
-/** 查找本机 Chrome / Edge 可执行文件 */
+/** 查找本机 Chrome / Edge 可执行文件（ONECAST_BROWSER 可覆盖，便于自测） */
 function findBrowser() {
+  if (process.env.ONECAST_BROWSER) {
+    try {
+      if (fs.existsSync(process.env.ONECAST_BROWSER)) return process.env.ONECAST_BROWSER;
+    } catch (e) { /* fall through */ }
+  }
   if (process.platform !== 'win32') return null;
   const roots = [
     path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
@@ -101,11 +129,171 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+/** 依次尝试多个选择器，返回第一个可见且面积最大的元素（跨 iframe） */
+async function findField(page, selectors) {
+  for (const sel of (selectors || [])) {
+    for (const frame of page.frames()) {
+      let els = [];
+      try {
+        els = await frame.$$(sel);
+      } catch (e) {
+        continue;
+      }
+      let best = null;
+      let bestArea = 0;
+      for (const el of els) {
+        const info = await el.evaluate(e => {
+          const r = e.getBoundingClientRect();
+          const cs = getComputedStyle(e);
+          return {
+            w: r.width,
+            h: r.height,
+            vis: cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0
+          };
+        }).catch(() => null);
+        if (!info || !info.vis || info.w < 20 || info.h < 10) continue;
+        const area = info.w * info.h;
+        if (area > bestArea) {
+          best = el;
+          bestArea = area;
+        }
+      }
+      if (best) return best;
+    }
+  }
+  return null;
+}
+
+/** 点击文本按钮（跨 iframe），用于切「发布图文 / 发布视频」等页签 */
+async function clickByText(page, texts) {
+  for (const frame of page.frames()) {
+    for (const t of texts) {
+      try {
+        const loc = frame.locator(`text=${t}`).first();
+        if (await loc.count()) {
+          await loc.click({ timeout: 3000 });
+          return true;
+        }
+      } catch (e) {
+        /* try next */
+      }
+    }
+  }
+  return false;
+}
+
+/** 选择文件输入框：按 accept 猜测是图片还是视频，避免塞错 input */
+async function pickFileInput(page, kind) {
+  for (const frame of page.frames()) {
+    let handles = [];
+    try {
+      handles = await frame.$$('input[type=file]');
+    } catch (e) {
+      continue;
+    }
+    let best = null;
+    let bestScore = -99;
+    for (const h of handles) {
+      const meta = await h.evaluate(e => ({
+        accept: (e.accept || '').toLowerCase(),
+        multiple: !!e.multiple
+      })).catch(() => ({ accept: '', multiple: false }));
+      let score = 0;
+      if (kind === 'image') {
+        if (meta.accept.includes('image')) score += 5;
+        if (!meta.accept || meta.accept.includes('*')) score += 2;
+        if (meta.accept.includes('video') && !meta.accept.includes('image')) score -= 4;
+      } else {
+        if (meta.accept.includes('video')) score += 5;
+        if (!meta.accept || meta.accept.includes('*')) score += 2;
+        if (meta.accept.includes('image') && !meta.accept.includes('video')) score -= 4;
+      }
+      if (meta.multiple) score += 1;
+      if (score > bestScore) {
+        best = h;
+        bestScore = score;
+      }
+    }
+    if (best && bestScore >= 0) return best;
+  }
+  return null;
+}
+
+/** 写入文本：input/textarea 走原生 setter（兼容 React 受控组件），其余走键盘输入 */
+async function writeField(page, el, text) {
+  await el.scrollIntoViewIfNeeded().catch(() => {});
+  const tag = await el.evaluate(e => e.tagName).catch(() => '');
+  if (tag === 'INPUT' || tag === 'TEXTAREA') {
+    const ok = await el.evaluate((e, t) => {
+      e.focus();
+      const proto = e.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+      setter.call(e, t);
+      e.dispatchEvent(new Event('input', { bubbles: true }));
+      e.dispatchEvent(new Event('change', { bubbles: true }));
+      return e.value === t;
+    }, text).catch(() => false);
+    if (ok) return true;
+  }
+  // contenteditable / 兜底：聚焦后全选，再用键盘输入替换，触发平台自己的 input 事件
+  await el.evaluate(e => {
+    e.focus();
+    if (e.isContentEditable) {
+      const r = document.createRange();
+      r.selectNodeContents(e);
+      const s = getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+    } else if (typeof e.select === 'function') {
+      e.select();
+    }
+  }).catch(() => {});
+  await page.keyboard.insertText(text);
+  return true;
+}
+
+const norm = s => String(s == null ? '' : s).replace(/\s+/g, '');
+
+/** 回读校验：确认文字真的写进了页面 */
+async function verifyField(el, text) {
+  const got = norm(await el.evaluate(e => (
+    ('value' in e && e.value != null) ? e.value : (e.innerText || e.textContent || '')
+  )).catch(() => ''));
+  const want = norm(text);
+  if (!got || !want) return false;
+  const head = want.slice(0, Math.min(12, want.length));
+  return got.includes(head) || head.includes(got.slice(0, 8));
+}
+
+/** 统计页面里的缩略图数量，用来确认素材真的上传了 */
+async function countThumbs(page) {
+  let n = 0;
+  for (const frame of page.frames()) {
+    try {
+      n += await frame.evaluate(() =>
+        document.querySelectorAll('img[src^="blob:"], img[src^="data:image"]').length);
+    } catch (e) { /* ignore */ }
+  }
+  return n;
+}
+
+async function waitUntil(fn, timeout = 15000, step = 500) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    try {
+      if (await fn()) return true;
+    } catch (e) { /* keep waiting */ }
+    await sleep(step);
+  }
+  return false;
+}
+
 class AutoRunner {
   constructor(userDataDir) {
     this.profileDir = path.join(userDataDir, 'browser-profile');
     this.logDir = path.join(userDataDir, 'automation-logs');
     this.context = null;
+    this.pages = new Map();
     this.busy = false;
     this.cancelled = false;
   }
@@ -122,13 +310,17 @@ class AutoRunner {
       locale: 'zh-CN',
       args: ['--no-first-run', '--no-default-browser-check', '--disable-blink-features=AutomationControlled']
     });
-    this.context.on('close', () => { this.context = null; });
+    this.context.on('close', () => {
+      this.context = null;
+      this.pages.clear();
+    });
     return this.context;
   }
 
   async close() {
     const ctx = this.context;
     this.context = null;
+    this.pages.clear();
     if (ctx) {
       try { await ctx.close(); } catch (e) { /* already gone */ }
     }
@@ -154,87 +346,79 @@ class AutoRunner {
     }
   }
 
-  /** 通用填表：上传素材 → 填标题/正文 → （可选）点发布 */
-  async fillOne(page, adapter, job, opts) {
-    const files = (job.files || []).filter(f => f && fs.existsSync(f.path)).map(f => f.path);
-    let uploaded = 0;
+  /** 每个平台复用一个标签页：填完不关闭，方便你直接核对并点发布 */
+  async getPage(pid, adapter) {
+    const ctx = await this.ensureContext();
+    let page = this.pages.get(pid);
+    if (page && !page.isClosed()) return page;
+    page = await ctx.newPage();
+    this.pages.set(pid, page);
+    page.on('close', () => this.pages.delete(pid));
+    if (adapter && adapter.host) {
+      try { await page.goto(adapter.url, { waitUntil: 'domcontentloaded', timeout: 35000 }); } catch (e) { /* handled by caller */ }
+    }
+    return page;
+  }
 
-    // 1. 素材上传：直接给 input[type=file] 塞文件，避免依赖按钮位置
+  /** 通用填表：切页签 → 上传素材 → 填标题/正文 → （可选）点发布，逐项回读校验 */
+  async fillOne(page, adapter, job) {
+    const files = (job.files || []).filter(f => f && fs.existsSync(f.path)).map(f => f.path);
+    const imagesOnly = files.length > 0 && files.every(f => /\.(png|jpe?g|webp|gif)$/i.test(f));
+    const fields = { title: false, body: false, images: 0 };
+
+    // 1. 先切到正确的发布类型（图文 / 视频）
+    const tabs = imagesOnly ? (adapter.imageTab || []) : (adapter.videoTab || []);
+    if (tabs.length && await clickByText(page, tabs)) await sleep(1500);
+
+    // 2. 上传素材：塞给正确的 file input（不要盲取第一个）
     if (files.length) {
-      let input = page.locator('input[type=file]').first();
-      if (await input.count() === 0) {
-        // 某些平台要先进「上传/图文」页签才会出现 file input
-        for (const t of (adapter.prepare || [])) {
-          const btn = page.locator(`text=${t}`).first();
-          if (await btn.count()) { await btn.click({ timeout: 3000 }).catch(() => {}); await sleep(1200); break; }
-        }
-        input = page.locator('input[type=file]').first();
+      let input = await pickFileInput(page, imagesOnly ? 'image' : 'video');
+      if (!input) {
+        await sleep(1500);
+        input = await pickFileInput(page, imagesOnly ? 'image' : 'video');
       }
-      if (await input.count() > 0) {
+      if (input) {
+        const before = await countThumbs(page);
         try {
-          await input.setInputFiles(files.slice(0, 18), { timeout: 15000 });
-          uploaded = Math.min(files.length, 18);
-          // 等缩略图生成 / 上传完成（经验值，超时也不阻塞后续填字）
-          await sleep(Math.min(4000 + uploaded * 900, 12000));
+          await input.setInputFiles(files.slice(0, 18), { timeout: 20000 });
+          await waitUntil(async () => (await countThumbs(page)) > before, 20000);
+          fields.images = Math.min(files.length, 18);
         } catch (e) {
-          /* 上传失败会在下面的截图里体现 */
+          /* 上传失败保持 0，后续如实报告 */
         }
       }
     }
 
-    // 2. 文本填写：标题（若有独立标题框）→ 正文
+    // 3. 等编辑区渲染出来（很多平台上传完素材才显示标题/正文）
+    await waitUntil(async () =>
+      (await findField(page, adapter.titleSelectors)) || (await findField(page, adapter.bodySelectors)), 15000);
+
     const content = job.content || {};
     const title = (content.title || '').trim();
     const body = (content.body || '').trim();
-    const tags = (content.tags || '').trim();
+    const tagList = (content.tags || '').split(/[,，\s#]+/).filter(Boolean);
+    const tags = tagList.map(t => '#' + t).join(' ');
+    const bodyText = [body, tags].filter(Boolean).join('\n');
 
-    if (title) {
-      const titleSel = adapter.titleInput || 'input[placeholder*="标题"]';
-      const t = page.locator(titleSel).first();
-      if (await t.count()) {
-        await t.click({ timeout: 3000 }).catch(() => {});
-        await t.fill('').catch(() => {});
-        await page.keyboard.insertText(title.slice(0, 80));
-      }
-    }
-    if (body || tags) {
-      const text = [body, tags ? tags.split(/[,，\s]+/).filter(Boolean).map(t => t.startsWith('#') ? t : '#' + t).join(' ') : '']
-        .filter(Boolean).join('\n');
-      // 选可见且面积最大的可写区作为正文，避免误填到隐藏的小编辑框
-      const hasBody = await page.evaluate(() => {
-        const vis = [...document.querySelectorAll('[contenteditable="true"], textarea')]
-          .filter(el => {
-            const r = el.getBoundingClientRect();
-            return r.width > 30 && r.height > 20;
-          })
-          .sort((a, b) => {
-            const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-            return rb.width * rb.height - ra.width * ra.height;
-          })[0];
-        if (!vis) return false;
-        vis.focus();
-        return true;
-      });
-      if (hasBody) await page.keyboard.insertText(text);
+    // 4. 标题
+    const titleEl = (adapter.titleSelectors || []).length
+      ? await findField(page, adapter.titleSelectors)
+      : null;
+    if (titleEl && title) {
+      await writeField(page, titleEl, title.slice(0, 80));
+      fields.title = await verifyField(titleEl, title.slice(0, 80));
     }
 
-    await sleep(600);
-
-    // 3. 仅当用户显式开启「自动提交」才点发布
-    let submitted = false;
-    if (opts.submit) {
-      for (const label of (adapter.submit || [])) {
-        const btn = page.locator(`button:has-text("${label}"), [role="button"]:has-text("${label}")`).last();
-        if (await btn.count()) {
-          await btn.click({ timeout: 5000 }).catch(() => {});
-          submitted = true;
-          break;
-        }
-      }
-      await sleep(1500);
+    // 5. 正文：没有独立标题框的平台（微博 / X）把标题并进正文
+    const finalBody = titleEl ? bodyText : [title, bodyText].filter(Boolean).join('\n');
+    const bodyEl = await findField(page, adapter.bodySelectors);
+    if (bodyEl && finalBody) {
+      await writeField(page, bodyEl, finalBody);
+      fields.body = await verifyField(bodyEl, finalBody);
     }
 
-    return { uploaded, submitted };
+    await sleep(500);
+    return fields;
   }
 
   async runOne(pid, job, opts, emit) {
@@ -242,14 +426,13 @@ class AutoRunner {
     if (!adapter) {
       return { pid, ok: false, stage: 'skip', message: '该平台暂不支持自动发布，请用半自动模式' };
     }
-    if (pid === 'wechat') {
-      return { pid, ok: false, stage: 'skip', message: '微信视频号/贴图没有网页发布入口，请用半自动模式' };
+    if (adapter.manual) {
+      return { pid, ok: false, stage: 'skip', message: `${adapter.name}：${adapter.note || '没有可用的网页发布入口'}，请用半自动模式` };
     }
 
     let page = null;
     try {
-      const ctx = await this.ensureContext();
-      page = await ctx.newPage();
+      page = await this.getPage(pid, adapter);
       page.setDefaultTimeout(20000);
       emit({ pid, stage: 'open', message: `打开${adapter.name}创作中心` });
       await page.goto(adapter.url, { waitUntil: 'domcontentloaded', timeout: 35000 });
@@ -259,34 +442,57 @@ class AutoRunner {
       if (/login|passport|signin|accounts\./i.test(url)) {
         const shot = await this.shot(page, pid + '-need-login');
         await page.bringToFront().catch(() => {});
-        return { pid, ok: false, stage: 'login',
-          message: `需要先在自动发布工作台登录${adapter.name}（窗口已打开，登录后重新点发布即可）`, shot };
+        return { pid, ok: false, stage: 'login', shot,
+          message: `需要先在自动发布工作台登录${adapter.name}（窗口已打开，登录后重新点发布即可）` };
       }
 
       await sleep(1200);
       emit({ pid, stage: 'upload', message: '上传素材并填写文案' });
-      const r = await this.fillOne(page, adapter, job, opts);
+      const r = await this.fillOne(page, adapter, job);
 
-      const shot = await this.shot(page, pid + (opts.submit ? '-submitted' : '-filled'));
-      if (opts.submit && !r.submitted) {
-        await page.bringToFront().catch(() => {});
-        return { pid, ok: true, stage: 'filled', uploaded: r.uploaded,
-          message: '已填好，但没找到发布按钮：请手动确认后发布', shot };
+      // 6. 仅当用户显式开启「自动提交」才点发布
+      let submitted = false;
+      if (opts.submit) {
+        for (const label of (adapter.submit || [])) {
+          const btn = page.locator(`button:has-text("${label}"), [role="button"]:has-text("${label}")`).last();
+          if (await btn.count()) {
+            await btn.click({ timeout: 5000 }).catch(() => {});
+            submitted = true;
+            break;
+          }
+        }
+        await sleep(1500);
       }
-      return {
-        pid, ok: true, stage: opts.submit ? 'submitted' : 'filled',
-        uploaded: r.uploaded,
-        message: opts.submit
-          ? `已填好并提交（上传 ${r.uploaded} 个素材），请在平台内确认结果`
-          : `已填好（上传 ${r.uploaded} 个素材），请在平台内检查并点击发布`,
-        shot
-      };
+
+      // 7. 把窗口切到前台，让你能直接看到填好的内容
+      await page.bringToFront().catch(() => {});
+
+      const parts = [];
+      if (job.content && job.content.title) parts.push('标题' + (r.title ? '✓' : '✗'));
+      if (job.content && (job.content.body || job.content.tags)) parts.push('正文' + (r.body ? '✓' : '✗'));
+      if (r.images) parts.push(`素材${r.images}张`);
+      const needTitle = !!(job.content && job.content.title);
+      const needBody = !!(job.content && (job.content.body || job.content.tags));
+      const needMedia = !!(job.files && job.files.length);
+      const complete = (!needTitle || r.title) && (!needBody || r.body) && (!needMedia || r.images > 0);
+
+      const shot = await this.shot(page, pid + (submitted ? '-submitted' : '-filled'));
+      if (submitted) {
+        return { pid, ok: true, stage: 'submitted', fields: r, shot, uploaded: r.images,
+          message: `已填写并提交（${parts.join(' ')}），请到平台后台核对是否真的发出` };
+      }
+      if (!complete) {
+        return { pid, ok: false, stage: 'partial', fields: r, shot, uploaded: r.images,
+          message: `部分内容没填进去（${parts.join(' ')}），窗口已保留，请在里面手动补全` };
+      }
+      return { pid, ok: true, stage: 'filled', fields: r, shot, uploaded: r.images,
+        message: `已填好（${parts.join(' ')}），窗口保持打开，核对后点发布即可` };
     } catch (e) {
       const shot = page ? await this.shot(page, pid + '-error') : '';
-      return { pid, ok: false, stage: 'error', message: '自动化出错：' + (e.message || e).slice(0, 120), shot };
-    } finally {
-      if (page) await page.close().catch(() => {});
+      return { pid, ok: false, stage: 'error', shot,
+        message: '自动化出错：' + (e.message || e).slice(0, 120) };
     }
+    // 注意：不关闭 page，填好的内容留在窗口里给你确认
   }
 
   async run(jobs, opts, emit) {

@@ -1940,6 +1940,7 @@ function runFreePublish(pids){
 const AUTO_STAGE_MAP={
   start:['running','排队中'], open:['running','打开创作中心'],
   upload:['running','上传素材 / 填文案'], filled:['manual','已填好，待点发布'],
+  partial:['blocked','部分内容未填入'],
   submitted:['success','已提交'], login:['manual','需先登录工作台'],
   error:['blocked','自动化出错'], skip:['blocked','该平台不支持自动'], busy:['blocked','任务冲突']
 };
@@ -1963,7 +1964,7 @@ async function runAutoPublish(pids, submit){
   state.running=true; state.jobs={};
   ready.forEach(pid=>{ state.jobs[pid]={state:'running',text:'排队中'}; });
   updatePublishButton(); renderMatrix(); renderHero();
-  toast(submit?'开始自动发布':'开始自动填表',ready.length+' 个平台 · 自动化窗口会被打开，请勿关闭','ok');
+  toast(submit?'开始自动发布':'开始自动填表',ready.length+' 个平台 · 填好的窗口会留着，可直接在里面点发布','ok');
 
   let res;
   try{ res=await api.run({jobs,submit:!!submit}); }
@@ -1978,9 +1979,9 @@ async function runAutoPublish(pids, submit){
 }
 
 function openAutoResult(results,submit){
-  const map={filled:'已填好（点发布）',submitted:'已提交',login:'需先登录',error:'出错',skip:'不支持自动'};
+  const map={filled:'已填好（点发布）',partial:'部分未填入',submitted:'已提交',login:'需先登录',error:'出错',skip:'不支持自动'};
   const body=`
-    <div class="gate-box">自动任务已结束。<b>${results.filter(r=>r.ok).length} 个成功</b>，${results.filter(r=>!r.ok).length} 个需处理。${submit?'已尝试提交的请到平台后台核对是否真的发出。':'填好内容的窗口已关闭，请在各平台重新打开创作中心完成发布。'}</div>
+    <div class="gate-box">自动任务已结束。<b>${results.filter(r=>r.ok).length} 个成功</b>，${results.filter(r=>!r.ok).length} 个需处理。${submit?'已尝试提交的请到平台后台核对是否真的发出。':'填好的标签页都留着了，直接在那个浏览器窗口里核对、点发布即可。'}</div>
     <div class="confirm-list">
       ${results.map(r=>`<div class="confirm-row">
         ${platformMark(getPlatform(r.pid))}
