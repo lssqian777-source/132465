@@ -531,7 +531,7 @@ video.pv-media{background:#000}
     <section class="card card-pad">
       <div class="step-head">
         <div class="step-left"><span class="step-num">1</span><h2>素材</h2></div>
-        <span class="hint">图片 ≤ 18 张，或单个视频；支持拖拽</span>
+        <span class="hint">图片与视频可同时添加，发布时会自动分配到支持的平台</span>
       </div>
       <div class="dropzone" id="dropzone">
         <input type="file" id="fileInput" accept="image/*,video/*" multiple>
@@ -690,37 +690,37 @@ video.pv-media{background:#000}
 <script>
 /* ============================== 数据层 ============================== */
 const PLATFORMS = [
-  {id:'douyin',name:'抖音',mark:'抖',brand:['#25f4ee','#fe2c55'],api:'semi',apiText:'官方半自动',
+  {id:'douyin',name:'抖音',mark:'抖',brand:['#25f4ee','#fe2c55'],api:'semi',apiText:'官方半自动',mediaType:'both',
    gate:'「发布内容至抖音」需申请能力；服务端代发仅向政务/媒体等特定主体开放。个人创作者走 H5/客户端分享，由用户在抖音内确认发布。图文与视频均可。',
    limit:'图文 ≤ 35 图；视频 ≤ 4GB / 单条',auth:'OAuth + openTicket',
    createUrl:'https://creator.douyin.com/creator-micro/content/upload',
    docs:'https://developer.open-douyin.com/docs/resource/zh-CN/dop/operation-standard/platform-capabilities/useclue'},
-  {id:'bilibili',name:'哔哩哔哩',mark:'B',brand:['#00a1d6','#fb7299'],api:'official',apiText:'官方 API',
+  {id:'bilibili',name:'哔哩哔哩',mark:'B',brand:['#00a1d6','#fb7299'],api:'official',apiText:'官方 API',mediaType:'video',
    gate:'开放平台「视频稿件管理」仅支持视频稿件：预处理 → 分片上传 → 稿件提交。图文请走专栏/动态。需申请开放平台权限。',
    limit:'仅视频；≤ 4GB / ≤ 5 小时；非正式会员 5 稿/日',auth:'OAuth（utoken）',
    createUrl:'https://member.bilibili.com/platform/upload/video/frame',
    docs:'https://open.bilibili.com/doc/4/0c532c6a-e6fb-0aff-8021-905ae2409095'},
-  {id:'xiaohongshu',name:'小红书',mark:'红',brand:['#ff2442','#ff6b81'],api:'none',apiText:'无公开发布 API',
+  {id:'xiaohongshu',name:'小红书',mark:'红',brand:['#ff2442','#ff6b81'],api:'none',apiText:'无公开发布 API',mediaType:'both',
    gate:'开放平台目前以电商/服务市场能力为主，笔记发布没有公开接口。第三方“一键发布”多依赖 Cookie 或浏览器自动化，存在违反平台协议与账号风险。',
    limit:'图文 ≤ 18 图；标题 ≤ 20 字',auth:'—（手动 / 半自动）',
    createUrl:'https://creator.xiaohongshu.com/publish/publish',
    docs:'https://open.xiaohongshu.com/home'},
-  {id:'weibo',name:'微博',mark:'微',brand:['#ff8200','#e6162d'],api:'official',apiText:'官方 API',
+  {id:'weibo',name:'微博',mark:'微',brand:['#ff8200','#e6162d'],api:'official',apiText:'官方 API',mediaType:'both',
    gate:'创建应用并申请发博权限；测试授权约 30 条/小时，普通授权频次更高。支持 OAuth 2.0。',
    limit:'正文 140 字；图片 ≤ 9 张',auth:'OAuth 2.0',
    createUrl:'https://weibo.com',
    docs:'https://open.weibo.com/wiki/2/statuses/share'},
-  {id:'wechat',name:'微信贴图',mark:'信',brand:['#07c160','#2bd67b'],api:'none',apiText:'无公开发布 API',
+  {id:'wechat',name:'微信贴图',mark:'信',brand:['#07c160','#2bd67b'],api:'none',apiText:'无公开发布 API',mediaType:'image',
    gate:'视频号/朋友圈未开放内容发布 API；公众号图文可走「素材管理 + 草稿箱」，仍需人工群发。若指微信表情包，只能通过表情开放平台人工投稿。',
    limit:'公众号草稿；视频号手动',auth:'AppID/Secret（仅草稿）',
    createUrl:'https://channels.weixin.qq.com/platform/post/create',
    docs:'https://developers.weixin.qq.com/doc/channels/api/'},
-  {id:'instagram',name:'Instagram',mark:'IG',brand:['#833ab4','#fd1d1d'],api:'official',apiText:'官方 API',
+  {id:'instagram',name:'Instagram',mark:'IG',brand:['#833ab4','#fd1d1d'],api:'official',apiText:'官方 API',mediaType:'both',
    gate:'需要 Instagram 专业账号、绑定 Meta 应用并通过审核。发布为“创建容器 → 发布容器”两步，仅媒体帖。',
    limit:'25 条/24h（保守口径，官方文档另有 100 条表述）',auth:'OAuth 2.0（Graph）',
    createUrl:'https://www.instagram.com/',
    docs:'https://developers.facebook.com/docs/instagram-platform/content-publishing'},
-  {id:'x',name:'X / Twitter',mark:'X',brand:['#3a3f4b','#0f1115'],api:'official',apiText:'官方 API',
+  {id:'x',name:'X / Twitter',mark:'X',brand:['#3a3f4b','#0f1115'],api:'official',apiText:'官方 API',mediaType:'both',
    gate:'开发者账号 + 写权限，OAuth 2.0 PKCE。2026 年起按量计费，无免费写额度。',
    limit:'$0.015/条；含链接 $0.20/条',auth:'OAuth 2.0 PKCE',
    createUrl:'https://x.com/compose/post',
@@ -1109,7 +1109,8 @@ function renderMedia(){
   if(!media.length){ meta.style.display='none'; return; }
   meta.style.display='flex';
   const total=media.reduce((s,m)=>s+m.size,0);
-  const kind=media.every(m=>m.kind==='video')?'视频':media.every(m=>m.kind==='image')?'图片':'混合';
+  const nImg=media.filter(m=>m.kind==='image').length, nVid=media.filter(m=>m.kind==='video').length;
+  const kind=[nImg?nImg+' 图':'', nVid?nVid+' 视频':''].filter(Boolean).join(' + ');
   const saved=IDB.usable&&media.some(m=>m.url&&m.url.startsWith('data:'))?' · 重启后保留':'';
   meta.innerHTML=`<span>${media.length} 个 · ${fmtSize(total)} · ${kind}${saved}</span><span>指纹 <code>${esc(mediaFingerprint().slice(0,16))}</code></span>`;
 
@@ -1229,6 +1230,22 @@ function openPreview(idx){
 }
 
 /* ============================== 校验 ============================== */
+/** 按平台能力 + 用户偏好，把全局素材拆成该平台该用的那一类（图片 / 视频） */
+function platformMedia(pid){
+  const p=getPlatform(pid);
+  const o=(state.overrides&&state.overrides[pid])||{};
+  const mode=o.mediaType||'auto';
+  const all=state.content.media||[];
+  const imgs=all.filter(m=>m.kind==='image');
+  const vids=all.filter(m=>m.kind==='video');
+  if(mode==='image') return imgs;
+  if(mode==='video') return vids;
+  // auto：按平台固定能力分配；both 平台默认图片优先（无图才用视频）
+  if(p.mediaType==='image') return imgs;
+  if(p.mediaType==='video') return vids;
+  return imgs.length ? imgs : vids;
+}
+
 function effective(pid){
   const o=state.overrides[pid]||{};
   return {
@@ -1236,13 +1253,14 @@ function effective(pid){
     body:o.body!==undefined?o.body:state.content.body,
     tags:o.tags!==undefined?o.tags:state.content.tags,
     visibility:o.visibility!==undefined?o.visibility:state.content.visibility,
-    schedule:o.schedule||''
+    schedule:o.schedule||'',
+    media:platformMedia(pid)
   };
 }
 
 function validatePlatform(pid){
   const p=getPlatform(pid), c=effective(pid), lim=LIMITS[pid];
-  const media=state.content.media;
+  const media=c.media; // 已按平台能力过滤（图 / 视频）
   const errors=[], warnings=[];
   const title=(c.title||'').trim(), body=(c.body||'').trim();
   if(!title&&!body) errors.push('文案为空');
@@ -1251,7 +1269,15 @@ function validatePlatform(pid){
   if(!lim.title&&!body) errors.push('正文为空');
   const videos=media.filter(m=>m.kind==='video'), imgs=media.filter(m=>m.kind==='image');
   const hasV=videos.length>0, hasI=imgs.length>0;
-  if(hasV&&hasI) errors.push('图片与视频不能混发');
+  // 全局若同时有图和视频，提醒用户：各平台只拿到自己那一类
+  const globalImgs=(state.content.media||[]).filter(m=>m.kind==='image').length;
+  const globalVids=(state.content.media||[]).filter(m=>m.kind==='video').length;
+  if(globalImgs&&globalVids){
+    if(p.mediaType==='image') warnings.push('视频不会发到该平台');
+    else if(p.mediaType==='video') warnings.push('图片不会发到该平台');
+    else if(imgs.length) warnings.push('视频将自动发给视频平台');
+    else warnings.push('图片将自动发给图文平台');
+  }
   if(pid==='douyin'){
     if(!hasV&&!hasI) errors.push('需要图片或视频');
     if(videos.length>1) errors.push('仅支持 1 个视频');
@@ -1259,7 +1285,6 @@ function validatePlatform(pid){
   }
   if(pid==='bilibili'){
     if(!hasV) errors.push('B 站视频投稿需要视频');
-    if(imgs.length) errors.push('图文请走专栏/动态');
     if(videos.length>1) errors.push('仅支持 1 个视频');
   }
   if(pid==='xiaohongshu'){
@@ -1269,6 +1294,9 @@ function validatePlatform(pid){
   }
   if(pid==='weibo'){
     if(imgs.length>9) errors.push('图片最多 9 张');
+  }
+  if(pid==='wechat'){
+    if(!hasI) errors.push('需要图片');
   }
   if(pid==='instagram'){
     if(!hasV&&!hasI) errors.push('需要媒体');
@@ -1320,6 +1348,7 @@ function renderMatrix(){
     const v=validatePlatform(p.id);
     const selected=state.selected.has(p.id);
     const c=effective(p.id);
+    const o=state.overrides[p.id]||{};
     const row=document.createElement('div');
     row.className='prow';
     row.innerHTML=`
@@ -1353,6 +1382,14 @@ function renderMatrix(){
           <div class="field"><label>标签</label><input class="inp" data-ov="tags" value="${escAttr(c.tags)}" placeholder="留空则使用全局标签"></div>
           <div class="field"><label>定时发布（可选）</label><input class="inp" type="datetime-local" data-ov="schedule" value="${escAttr(c.schedule)}"></div>
         </div>
+        ${p.mediaType==='both'?`<div class="field"><label>素材类型（该平台图文/视频都行，默认自动）</label>
+          <select class="sel" data-ov="mediaType">
+            <option value="auto" ${(o.mediaType||'auto')==='auto'?'selected':''}>自动（有图用图，无图用视频）</option>
+            <option value="image" ${o.mediaType==='image'?'selected':''}>仅图片（图文）</option>
+            <option value="video" ${o.mediaType==='video'?'selected':''}>仅视频</option>
+          </select>
+          <span class="muted" style="font-size:10.5px">当前会用到：${c.media.length?c.media.map(m=>m.name).slice(0,2).join('、')+(c.media.length>2?' 等 '+c.media.length+' 个':''):'无'}</span>
+        </div>`:''}
       </div>`;
     wrap.appendChild(row);
 
@@ -1950,17 +1987,18 @@ async function runAutoPublish(pids, submit){
   const ready=pids.filter(pid=>validatePlatform(pid).ok);
   if(!ready.length){ toast('没有可执行的平台','请先修正校验问题','warn'); return; }
 
-  const media=state.content.media.filter(m=>m.url&&m.url.startsWith('data:'));
-  const missing=state.content.media.length-media.length;
-  if(state.content.media.length&&!media.length){
+  const jobs=ready.map(pid=>{
+    const pm=platformMedia(pid).filter(m=>m.url&&m.url.startsWith('data:'));
+    return {pid, content:effective(pid), files:pm.map(m=>({name:m.name,dataUrl:m.url}))};
+  });
+  const totalMissing=state.content.media.filter(m=>!(m.url&&m.url.startsWith('data:'))).length;
+  if(totalMissing) toast('部分素材被跳过',totalMissing+' 个素材不是本机保存格式，已跳过','warn');
+  if(state.content.media.length&&!jobs.some(j=>j.files.length)){
     toast('素材无法传给平台','素材没有保存在本机素材库中，请重新上传一次','err');
     return;
   }
-  if(missing) toast('部分素材被跳过',missing+' 个素材不是本机保存格式，已跳过','warn');
   const dup=findDuplicate(state.content.title,state.content.body);
   if(dup) toast('与历史内容重复',histTime(dup.ts)+' 已发过相同文案，确认要再发一次吗','warn');
-
-  const jobs=ready.map(pid=>({pid,content:effective(pid),files:media.map(m=>({name:m.name,dataUrl:m.url}))}));
   state.running=true; state.jobs={};
   ready.forEach(pid=>{ state.jobs[pid]={state:'running',text:'排队中'}; });
   updatePublishButton(); renderMatrix(); renderHero();
@@ -2003,9 +2041,11 @@ function openPackModal(pids){
       ${pids.map(pid=>{
         const p=getPlatform(pid), acc=getAccount(pid), e=effective(pid);
         const preview=[e.title,e.body].filter(Boolean).join(' · ')||'（无文案，请补充）';
+        const pm=e.media||[];
+        const pmText=pm.length?` · ${pm.filter(m=>m.kind==='image').length}图${pm.filter(m=>m.kind==='video').length}视频` : '';
         return `<div class="pack-row" data-pack="${pid}">
           ${platformMark(p)}
-          <div class="pack-info"><b>${esc(p.name)}${acc&&acc.handle?' · '+esc(acc.handle):''}</b><span>${esc(preview.slice(0,90))}${preview.length>90?'…':''}</span></div>
+          <div class="pack-info"><b>${esc(p.name)}${acc&&acc.handle?' · '+esc(acc.handle):''}</b><span>${esc(preview.slice(0,70))}${preview.length>70?'…':''}${pmText}</span></div>
           <div class="pack-acts">
             <button class="btn mini" data-copy="${pid}">复制文案</button>
             <button class="btn mini accent" data-open-pack="${pid}">打开创作中心</button>
@@ -2062,7 +2102,7 @@ async function runPublish(pids){
             platform:pid,
             account:(getAccount(pid)||{}).handle||'',
             content:effective(pid),
-            media:state.content.media.map(m=>({name:m.name,size:m.size,type:m.type})),
+            media:effective(pid).media.map(m=>({name:m.name,size:m.size,type:m.type})),
             dryRun:false
           })
         });
