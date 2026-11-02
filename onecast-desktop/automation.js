@@ -89,37 +89,43 @@ const ADAPTERS = {
     name: '微信（视频号/贴图）',
     url: 'https://channels.weixin.qq.com/platform/post/create',
     host: 'weixin.qq.com',
-    manual: true,
-    imageTab: [],
-    videoTab: [],
-    titleSelectors: [],
-    bodySelectors: [],
-    submit: [],
-    note: '视频号/朋友圈没有可用的网页发布接口，只能手动'
+    imageTab: ['图文', '图片'],
+    videoTab: ['视频'],
+    titleSelectors: ['input[placeholder*="标题"]', 'textarea[placeholder*="标题"]'],
+    bodySelectors: ['div[contenteditable="true"]', 'textarea[placeholder*="描述"]', 'textarea'],
+    submit: ['发表', '发布', '创建'],
+    note: '视频号助手网页版可发图文/视频；朋友圈无网页接口，贴图请手动'
   }
 };
 
-/** 查找本机 Chrome / Edge 可执行文件（ONECAST_BROWSER 可覆盖，便于自测） */
-function findBrowser() {
+/** 查找本机 Chrome / Edge 可执行文件
+ * @param {'auto'|'chrome'|'edge'} [preference='auto'] 用户偏好的浏览器
+ */
+function findBrowser(preference) {
   if (process.env.ONECAST_BROWSER) {
     try {
       if (fs.existsSync(process.env.ONECAST_BROWSER)) return process.env.ONECAST_BROWSER;
     } catch (e) { /* fall through */ }
   }
   if (process.platform !== 'win32') return null;
-  const roots = [
+  const chromePaths = [
     path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+  ];
+  const edgePaths = [
     path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
   ];
-  for (const p of roots) {
-    try {
-      if (p && fs.existsSync(p)) return p;
-    } catch (e) {
-      /* keep probing */
+  const order = preference === 'chrome' ? [chromePaths, edgePaths]
+              : preference === 'edge'   ? [edgePaths, chromePaths]
+              : /* auto */                [chromePaths, edgePaths];
+  for (const group of order) {
+    for (const p of group) {
+      try {
+        if (p && fs.existsSync(p)) return p;
+      } catch (e) { /* keep probing */ }
     }
   }
   return null;
@@ -293,18 +299,29 @@ class AutoRunner {
     this.profileDir = path.join(userDataDir, 'browser-profile');
     this.logDir = path.join(userDataDir, 'automation-logs');
     this.context = null;
+    this.currentExe = null;
     this.pages = new Map();
     this.busy = false;
     this.cancelled = false;
   }
 
-  async ensureContext() {
+  /**
+   * @param {'auto'|'chrome'|'edge'} [browserPref='auto']
+   */
+  async ensureContext(browserPref) {
+    const want = findBrowser(browserPref);
+    if (!want) throw new Error('未找到本机 Chrome 或 Edge，请先安装其中一个浏览器');
+    // 偏好变了 → 关掉旧 context 重建（换浏览器）
+    if (this.context && this.currentExe && this.currentExe !== want) {
+      try { await this.context.close(); } catch (e) { /* already gone */ }
+      this.context = null;
+      this.pages.clear();
+    }
     if (this.context) return this.context;
     fs.mkdirSync(this.profileDir, { recursive: true });
-    const exe = findBrowser();
-    if (!exe) throw new Error('未找到本机 Chrome 或 Edge，请先安装其中一个浏览器');
+    this.currentExe = want;
     this.context = await chromium.launchPersistentContext(this.profileDir, {
-      executablePath: exe,
+      executablePath: want,
       headless: false,
       viewport: null,
       locale: 'zh-CN',
@@ -327,8 +344,8 @@ class AutoRunner {
   }
 
   /** 打开工作台让用户登录（只打开首页，不做任何操作） */
-  async openWorkbench() {
-    const ctx = await this.ensureContext();
+  async openWorkbench(browserPref) {
+    const ctx = await this.ensureContext(browserPref);
     const page = ctx.pages()[0] || await ctx.newPage();
     await page.goto('https://creator.douyin.com/', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
     await page.bringToFront().catch(() => {});
@@ -347,8 +364,8 @@ class AutoRunner {
   }
 
   /** 每个平台复用一个标签页：填完不关闭，方便你直接核对并点发布 */
-  async getPage(pid, adapter) {
-    const ctx = await this.ensureContext();
+  async getPage(pid, adapter, browserPref) {
+    const ctx = await this.ensureContext(browserPref);
     let page = this.pages.get(pid);
     if (page && !page.isClosed()) return page;
     page = await ctx.newPage();
@@ -432,7 +449,7 @@ class AutoRunner {
 
     let page = null;
     try {
-      page = await this.getPage(pid, adapter);
+      page = await this.getPage(pid, adapter, opts.browser);
       page.setDefaultTimeout(20000);
       emit({ pid, stage: 'open', message: `打开${adapter.name}创作中心` });
       await page.goto(adapter.url, { waitUntil: 'domcontentloaded', timeout: 35000 });
