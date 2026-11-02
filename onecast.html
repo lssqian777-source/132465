@@ -736,7 +736,7 @@ const LS = {
   accounts:'onecast.accounts.v1', settings:'onecast.settings.v1', audit:'onecast.audit.v1',
   vault:'onecast.vault.v1', content:'onecast.content.v1', hashes:'onecast.hashes.v1'
 };
-const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10,freeMode:true,autoPublish:false,autoSubmit:false};
+const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10,freeMode:true,autoPublish:false,autoSubmit:false,browser:'auto'};
 
 const state = {
   accounts:[], settings:{...DEFAULT_SETTINGS}, audit:[], hashes:[], history:[],
@@ -1661,6 +1661,13 @@ function openSettings(){
     <div style="border-top:1px solid var(--line);padding-top:12px;margin-bottom:12px">
       <div style="font-size:10.5px;color:var(--muted);margin-bottom:7px">实验性自动发布（可选）</div>
       <label class="confirm-check" style="margin:0 0 7px"><input type="checkbox" id="stAuto" ${s.autoPublish?'checked':''}> 启用自动发布：用本机 Chrome / Edge 打开各平台创作中心，自动上传素材并填好文案</label>
+      <div class="field" style="margin:0 0 8px"><label>驱动浏览器</label>
+        <select class="sel" id="stBrowser">
+          <option value="auto" ${s.browser==='auto'?'selected':''}>自动（优先 Chrome，其次 Edge）</option>
+          <option value="chrome" ${s.browser==='chrome'?'selected':''}>Google Chrome</option>
+          <option value="edge" ${s.browser==='edge'?'selected':''}>Microsoft Edge</option>
+        </select>
+      </div>
       <div class="warn-box" style="margin:0 0 8px">该方式通过模拟人工操作完成，<b>不符合各平台的机器发布条款</b>，存在被限流或封号的风险，建议先用一个新注册的小号试点。平台页面改版后可能失效。</div>
       <label class="confirm-check" style="margin:0 0 9px"><input type="checkbox" id="stAutoSubmit" ${s.autoSubmit?'checked':''}> 允许自动点击「发布」按钮（默认只填表，最后一步留给你确认）</label>
       <button class="btn mini" id="stWorkbench" type="button">打开自动发布工作台（首次登录用）</button>
@@ -1690,6 +1697,7 @@ function openSettings(){
     state.settings.freeMode=free;
     state.settings.autoPublish=$('#stAuto').checked;
     state.settings.autoSubmit=$('#stAutoSubmit').checked;
+    state.settings.browser=$('#stBrowser').value||'auto';
     persistSettings(); closeModal(); syncSettingsUI(); renderAll();
     toast('设置已保存',state.settings.autoPublish?'自动发布已启用（'+(state.settings.autoSubmit?'自动提交':'仅自动填表')+'）':state.settings.freeMode?'零成本模式：不会调用平台 API':mode==='live'?'真实模式：请求将发往后端':'演示模式：不会发起请求','ok');
   };
@@ -1697,7 +1705,7 @@ function openSettings(){
   $('#stWorkbench').onclick=async ()=>{
     const api=window.onecastAuto;
     if(!api){ toast('自动发布不可用','当前环境不支持（只有桌面版可以驱动浏览器）','err'); return; }
-    const r=await api.openWorkbench();
+    const r=await api.openWorkbench(state.settings.browser||'auto');
     toast(r.ok?'工作台已打开':'打开失败',r.message||'',r.ok?'ok':'err');
   };
   $('#stImportBtn').onclick=()=>$('#stImport').click();
@@ -2005,7 +2013,7 @@ async function runAutoPublish(pids, submit){
   toast(submit?'开始自动发布':'开始自动填表',ready.length+' 个平台 · 填好的窗口会留着，可直接在里面点发布','ok');
 
   let res;
-  try{ res=await api.run({jobs,submit:!!submit}); }
+  try{ res=await api.run({jobs,submit:!!submit,browser:state.settings.browser||'auto'}); }
   catch(e){ res={ok:false,error:String(e.message||e)}; }
   state.running=false; renderAll();
   if(!res.ok) toast('自动发布失败',res.error||'未知错误','err');
@@ -2087,7 +2095,7 @@ async function runAutoFillOne(pid,btn){
     off=api.onProgress&&api.onProgress(data=>{
       if(data&&data.pid===pid&&data.text) btn.textContent=data.text.slice(0,12);
     });
-    const res=await api.run({jobs:[job],submit:false});
+    const res=await api.run({jobs:[job],submit:false,browser:state.settings.browser||'auto'});
     if(res.ok){
       const r=(res.results||[])[0]||{};
       btn.textContent=r.ok?'已填好 ✓':'部分未填';

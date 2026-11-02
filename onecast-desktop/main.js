@@ -205,8 +205,8 @@ function writeTempMedia(files) {
 }
 
 function registerAutoHandlers() {
-  ipcMain.handle('auto:status', () => ({
-    browser: findBrowser() || '',
+  ipcMain.handle('auto:status', (event, pref) => ({
+    browser: findBrowser(pref) || '',
     adapters: Object.keys(ADAPTERS).map(k => ({
       pid: k,
       name: ADAPTERS[k].name,
@@ -215,9 +215,9 @@ function registerAutoHandlers() {
     }))
   }));
 
-  ipcMain.handle('auto:workbench', async () => {
+  ipcMain.handle('auto:workbench', async (event, pref) => {
     try {
-      return { ok: true, message: await getRunner().openWorkbench() };
+      return { ok: true, message: await getRunner().openWorkbench(pref) };
     } catch (e) {
       return { ok: false, message: String(e.message || e) };
     }
@@ -239,7 +239,7 @@ function registerAutoHandlers() {
       if (!sender.isDestroyed()) sender.send('auto:progress', data);
     };
     try {
-      const results = await getRunner().run(jobs, { submit: !!payload.submit }, emit);
+      const results = await getRunner().run(jobs, { submit: !!payload.submit, browser: payload.browser }, emit);
       return { ok: true, results };
     } catch (e) {
       return { ok: false, results: [], error: String(e.message || e) };
