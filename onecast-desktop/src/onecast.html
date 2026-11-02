@@ -2035,8 +2035,9 @@ function openAutoResult(results,submit){
 
 function openPackModal(pids){
   const c=state.content;
+  const auto=window.onecastAuto;
   const body=`
-    <div class="gate-box"><b>${pids.length} 个平台待发布</b><br>逐个点击“复制文案”和“打开创作中心”。素材不会自动上传，请在平台页面手动选择原文件。</div>
+    <div class="gate-box"><b>${pids.length} 个平台待发布</b><br>${auto?'点「自动填表」会自动上传素材并填好文案，填完后在打开的窗口里核对并点发布。':'逐个点击“复制文案”和“打开创作中心”，在平台页面手动粘贴与上传。'}</div>
     <div class="pack-list">
       ${pids.map(pid=>{
         const p=getPlatform(pid), acc=getAccount(pid), e=effective(pid);
@@ -2048,22 +2049,66 @@ function openPackModal(pids){
           <div class="pack-info"><b>${esc(p.name)}${acc&&acc.handle?' · '+esc(acc.handle):''}</b><span>${esc(preview.slice(0,70))}${preview.length>70?'…':''}${pmText}</span></div>
           <div class="pack-acts">
             <button class="btn mini" data-copy="${pid}">复制文案</button>
-            <button class="btn mini accent" data-open-pack="${pid}">打开创作中心</button>
+            <button class="btn mini accent" data-open-pack="${pid}">${auto?'自动填表':'打开创作中心'}</button>
           </div>
         </div>`;
       }).join('')}
     </div>
     <div class="warn-box">发布完成后请在各平台确认状态；本页不自动记账。优先使用平台自带的定时发布，替代本工具的定时字段。</div>
     <div class="pack-media"><b style="color:var(--txt)">素材清单</b><br>${c.media.map(m=>esc(m.name)+' · '+fmtSize(m.size)).join('<br>')||'未添加素材'}${c.cover?'<br>封面：'+esc(c.cover.name):''}</div>`;
-  openModal('零成本发布包','复制文案 → 打开创作中心 → 手动发布',body,'<button class="btn ghost" data-close-pack>完成</button>');
+  openModal('零成本发布包',auto?'自动填表 → 核对 → 点发布':'复制文案 → 打开创作中心 → 手动发布',body,'<button class="btn ghost" data-close-pack>完成</button>');
   $('[data-close-pack]').onclick=closeModal;
   $$('[data-copy]').forEach(b=>b.onclick=()=>copyContent(b.dataset.copy));
   $$('[data-open-pack]').forEach(b=>b.onclick=()=>{
     const pid=b.dataset.openPack;
-    copyContent(pid);
-    window.open(getPlatform(pid).createUrl,'_blank','noopener');
-    b.textContent='已打开';
+    if(auto){
+      runAutoFillOne(pid,b);
+    }else{
+      copyContent(pid);
+      window.open(getPlatform(pid).createUrl,'_blank','noopener');
+      b.textContent='已打开';
+    }
   });
+}
+
+/* 单平台自动填表：传素材 + 填文案，发布由用户手动点 */
+async function runAutoFillOne(pid,btn){
+  const api=window.onecastAuto;
+  const v=validatePlatform(pid);
+  if(!v.ok){ toast('校验未通过',v.errors[0],'warn'); return; }
+  const pm=platformMedia(pid).filter(m=>m.url&&m.url.startsWith('data:'));
+  if(!pm.length&&state.content.media.length){
+    toast('素材无法上传','素材没有保存在本机，请重新添加一次','err'); return;
+  }
+  const job={pid, content:effective(pid), files:pm.map(m=>({name:m.name,dataUrl:m.url}))};
+  btn.disabled=true; btn.textContent='填表中…';
+  let off;
+  try{
+    off=api.onProgress&&api.onProgress(data=>{
+      if(data&&data.pid===pid&&data.text) btn.textContent=data.text.slice(0,12);
+    });
+    const res=await api.run({jobs:[job],submit:false});
+    if(res.ok){
+      const r=(res.results||[])[0]||{};
+      btn.textContent=r.ok?'已填好 ✓':'部分未填';
+      btn.style.background=r.ok?'':'';
+      toast(getPlatform(pid).name+(r.ok?'已填好，请在窗口里点发布':'填表不完整：'+(r.message||'')),r.ok?'ok':'warn');
+    }else{
+      btn.textContent='失败';
+      toast('自动填表失败',res.error||'未知错误','err');
+    }
+  }catch(e){
+    btn.textContent='出错';
+    toast('自动填表出错',String(e.message||e),'err');
+  }finally{
+    if(off) off();
+    btn.disabled=false;
+    // 失败/未填时，回退到打开创作中心让用户手动操作
+    if(btn.textContent!=='已填好 ✓'){
+      copyContent(pid);
+      window.open(getPlatform(pid).createUrl,'_blank','noopener');
+    }
+  }
 }
 
 async function runPublish(pids){
