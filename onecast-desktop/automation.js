@@ -730,9 +730,20 @@ class AutoRunner {
       emit({ pid, stage: 'open', message: `打开${adapter.name}创作中心` });
       await page.goto(adapter.url, { waitUntil: 'domcontentloaded', timeout: 35000 });
 
-      // 登录态检测：被带到登录页说明该工作台还没登录过这个平台
+      // 登录态检测：URL 跳到登录页，或页面里出现扫码/登录框，都算未登录
       const url = page.url();
-      if (/login|passport|signin|accounts\./i.test(url)) {
+      let needLogin = /login|passport|signin|accounts\.|newlogin/i.test(url);
+      if (!needLogin) {
+        // 检查页面内容：抖音等平台 URL 不变但弹登录遮罩
+        needLogin = await page.evaluate(() => {
+          const body = document.body ? (document.body.innerText || '') : '';
+          if (/扫码登录|扫码登|请输入手机号|验证码登录|密码登录/.test(body)) return true;
+          // 二维码图片也是登录标志
+          const imgs = document.querySelectorAll('img[src*="qrcode"], img[src*="qr-code"]');
+          return imgs.length > 0;
+        }).catch(() => false);
+      }
+      if (needLogin) {
         const shot = await this.shot(page, pid + '-need-login');
         await page.bringToFront().catch(() => {});
         return { pid, ok: false, stage: 'login', shot,
