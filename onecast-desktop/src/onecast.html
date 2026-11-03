@@ -634,24 +634,15 @@ video.pv-media{background:#000}
           <option value="deepseek">DeepSeek（chat.deepseek.com）</option>
         </select>
       </div>
-      <div class="field" style="margin-bottom:8px">
-        <label>爆款横向对比 <span class="sub">可选</span></label>
-        <div style="display:flex;gap:6px">
-          <select class="sel" id="aiHotSource" style="flex:1">
-            <option value="douyin">抖音热榜</option>
-            <option value="weibo">微博热搜</option>
-            <option value="bilibili">B站热门</option>
-          </select>
-          <button class="btn mini" id="btnAIFetchHot" style="white-space:nowrap">拉取热点</button>
-        </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px;padding:6px 8px;background:var(--panel2);border-radius:7px;border:1px solid var(--line);line-height:1.5">
+        自动对比 <b style="color:var(--txt)">抖音热榜 + 微博热搜 + B站热门</b> 当前全部热点，无需手动选择
       </div>
-      <div id="aiHotList" style="display:none;max-height:150px;overflow:auto;margin-bottom:8px"></div>
       <button class="btn primary" id="btnAIScore" style="width:100%;margin-bottom:10px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-        开始评分
+        开始评分 + 爆款对比
       </button>
       <div class="ai-status" id="aiStatus" style="display:none;font-size:11.5px;color:var(--muted);margin-bottom:8px;padding:6px 8px;background:var(--panel2);border-radius:7px;border:1px solid var(--line)"></div>
-      <div class="ai-result" id="aiResult" style="display:none;max-height:340px;overflow:auto;font-size:12px;line-height:1.65;color:var(--txt);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word"></div>
+      <div class="ai-result" id="aiResult" style="display:none;max-height:72vh;min-height:200px;overflow:auto;font-size:12px;line-height:1.7;color:var(--txt);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;white-space:pre-wrap;word-break:break-word"></div>
       <div class="inline-hint" style="margin-top:7px">首次使用会打开浏览器窗口，请在里面登录豆包/DeepSeek，登录态长期保留。</div>
     </section>
 
@@ -2171,53 +2162,27 @@ async function runAutoFillOne(pid,btn){
 }
 
 /* AI 内容评分：把当前文案+素材描述发给豆包/DeepSeek 网页版，抓取评分结果 */
-let aiHot={source:'',items:[],picked:new Set()};
+/* 爆款对比：自动同时拉取抖音热榜+微博热搜+B站热门，全部热点参与对比，无需手动选择 */
+let aiHotCache=null; // {douyin:[], weibo:[], bilibili:[], ts}
 
-async function fetchAIHot(){
+async function fetchAllHot(statusEl){
   const api=window.onecastAI;
-  if(!api||!api.hot){ toast('热榜不可用','只有桌面版能拉取热榜','err'); return; }
-  const src=$('#aiHotSource').value;
-  const btn=$('#btnAIFetchHot');
-  btn.disabled=true; btn.textContent='拉取中…';
-  try{
-    const r=await api.hot(src);
-    if(!r.ok){ toast('拉取失败',r.error||'平台接口暂时不可用','warn'); return; }
-    const items=r.items||[];
-    aiHot={source:src,items,picked:new Set(items.slice(0,8).map(x=>x.title))};
-    renderAIHot();
-    toast('已拉取 '+items.length+' 条','默认选中前 8 条，可点选调整','ok');
-  }catch(e){
-    toast('拉取出错',String(e.message||e),'err');
-  }finally{
-    btn.disabled=false; btn.textContent='拉取热点';
-  }
+  if(!api||!api.hot) return null;
+  const srcs=['douyin','weibo','bilibili'];
+  const names={douyin:'抖音热榜',weibo:'微博热搜',bilibili:'B站热门'};
+  const out={douyin:[],weibo:[],bilibili:[]};
+  await Promise.all(srcs.map(async s=>{
+    try{
+      if(statusEl) statusEl.textContent='拉取 '+names[s]+'…';
+      const r=await api.hot(s);
+      if(r&&r.ok) out[s]=r.items||[];
+    }catch(e){ /* 单个失败不阻断整体 */ }
+  }));
+  const total=out.douyin.length+out.weibo.length+out.bilibili.length;
+  return total? { sources:out, ts:Date.now() } : null;
 }
 
 function fmtHot(n){ n=Number(n||0); if(!n) return ''; return n>=10000?(n/10000).toFixed(1)+'万':String(n); }
-
-function renderAIHot(){
-  const box=$('#aiHotList');
-  if(!aiHot.items.length){ box.style.display='none'; box.innerHTML=''; return; }
-  const srcName={douyin:'抖音热榜',weibo:'微博热搜',bilibili:'B站热门'}[aiHot.source]||aiHot.source;
-  box.style.display='block';
-  box.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:5px">${srcName} · 点选要参与对比的热点（已选 ${aiHot.picked.size} 条）</div>`+
-    aiHot.items.map((it,i)=>{
-      const on=aiHot.picked.has(it.title);
-      return `<label style="display:flex;gap:6px;align-items:flex-start;font-size:11.5px;line-height:1.45;padding:4px 6px;border:1px solid ${on?'var(--accent)':'var(--line)'};border-radius:6px;margin-bottom:4px;cursor:pointer;background:${on?'var(--panel2)':'transparent'}">
-        <input type="checkbox" data-hot-i="${i}" ${on?'checked':''} style="margin-top:2px;flex:none">
-        <span style="flex:1;word-break:break-all">${esc(it.title)}</span>
-        <span style="color:var(--dim);font-size:10px;flex:none">${fmtHot(it.hot)}</span>
-      </label>`;
-    }).join('');
-  box.querySelectorAll('input[data-hot-i]').forEach(cb=>{
-    cb.onchange=()=>{
-      const it=aiHot.items[Number(cb.dataset.hotI)];
-      if(!it) return;
-      if(cb.checked) aiHot.picked.add(it.title); else aiHot.picked.delete(it.title);
-      renderAIHot();
-    };
-  });
-}
 
 async function runAIScore(){
   const api=window.onecastAI;
@@ -2229,21 +2194,38 @@ async function runAIScore(){
   const statusEl=$('#aiStatus');
   const resultEl=$('#aiResult');
 
+  btn.disabled=true; btn.textContent='处理中…';
+  statusEl.style.display='block'; statusEl.textContent='准备中…';
+  resultEl.style.display='none';
+
+  // 自动拉取三个热榜（用缓存避免每次都请求，5 分钟内复用）
+  const now=Date.now();
+  if(!aiHotCache || now-aiHotCache.ts>5*60*1000){
+    const hot=await fetchAllHot(statusEl);
+    if(hot) aiHotCache=hot;
+  }
+  const hot=aiHotCache? aiHotCache.sources : {douyin:[],weibo:[],bilibili:[]};
+  const names={douyin:'抖音热榜',weibo:'微博热搜',bilibili:'B站热门'};
+  const hotLines=[];
+  for(const s of ['douyin','weibo','bilibili']){
+    const arr=hot[s]||[];
+    if(arr.length){
+      hotLines.push(`\n【${names[s]} · ${arr.length} 条】`);
+      arr.slice(0,15).forEach((x,i)=>{ hotLines.push(`${i+1}. ${x.title}${x.hot?'（热度 '+fmtHot(x.hot)+'）':''}`); });
+    }
+  }
+  const hotBlock=hotLines.length
+    ? hotLines.join('\n')+`\n\n请务必做横向对比：把我的待发布内容与上述各平台爆款逐项对比（选题契合度、标题写法、开头钩子、内容结构、情绪价值、可借鉴的爆款元素），明确指出我的内容差在哪里、可以直接照抄改写的部分。`
+    : '';
+
   // 拼接评分 prompt：标题 + 正文 + 标签 + 素材概况
   const mediaInfo=c.media.length
     ? `\n\n【素材】共 ${c.media.length} 个：${c.media.map(m=>m.name).slice(0,12).join('、')}${c.media.length>12?' 等':''}`
     : '';
-  // 选中了热榜 → 追加「与当前爆款横向对比」的要求
-  const hotPicked=aiHot.items.filter(x=>aiHot.picked.has(x.title));
-  const hotBlock=hotPicked.length
-    ? `\n\n【${({douyin:'抖音热榜',weibo:'微博热搜',bilibili:'B站热门'})[aiHot.source]||aiHot.source}当前爆款/热点 ${hotPicked.length} 条】\n`+
-      hotPicked.map((x,i)=>`${i+1}. ${x.title}${x.hot?'（热度 '+fmtHot(x.hot)+'）':''}`).join('\n')+
-      `\n\n请务必做横向对比：把我的待发布内容与上述爆款逐项对比（选题契合度、标题写法、开头钩子、内容结构、情绪价值、可借鉴的爆款元素），明确指出我的内容差在哪里、可以直接照抄改写的部分。`
-    : '';
   const prompt=`你是一位资深自媒体内容运营专家。请对下面这条待发布内容进行专业评分和优化建议：
 
 【标题】${c.title||'(无)'}
-【正文】${c.body||'(无)'}${c.tags?`\n【标签】${c.tags}`:''}${mediaInfo}${hotBlock}
+【正文】${c.body||'(无)'}${c.tags?`\n【标签】${c.tags}`:''}${mediaInfo}${hotBlock? '\n'+hotBlock : ''}
 
 请按以下格式输出：
 1. 综合评分：X/10（并说明理由）
@@ -2251,13 +2233,11 @@ async function runAIScore(){
 3. 正文质量：X/10 + 优化建议
 4. 平台适配：哪些平台适合发，哪些不适合，为什么
 5. 3 条可直接替换的优化标题
-6. 正文里需要修改的具体问题（逐条列出）${hotBlock?'\n7. 爆款横向对比：我的内容与选中爆款的差距（差距点 + 可直接借鉴的写法）':''}
+6. 正文里需要修改的具体问题（逐条列出）${hotBlock?'\n7. 爆款横向对比：我的内容与各平台爆款的差距（差距点 + 可直接借鉴的写法）':''}
 
 请直接给出评分和建议，不要寒暄。`;
 
-  btn.disabled=true; btn.textContent='评分中…';
-  statusEl.style.display='block'; statusEl.textContent='准备中…';
-  resultEl.style.display='none';
+  btn.textContent='评分中…';
   let off;
   try{
     off=api.onProgress&&api.onProgress(data=>{
@@ -2678,8 +2658,6 @@ function bindEvents(){
   $('#btnPublish').onclick=openPublishConfirm;
   $('#btnHistoryAll').onclick=openHistoryAll;
   $('#btnAIScore').onclick=runAIScore;
-  $('#btnAIFetchHot').onclick=fetchAIHot;
-  $('#aiHotSource').onchange=()=>{ aiHot={source:'',items:[],picked:new Set()}; renderAIHot(); };
   $('#btnSaveDraft').onclick=()=>{
     persistContent(); persistAccounts();
     toast('草稿已保存','文案与平台适配已写入本机','ok');
