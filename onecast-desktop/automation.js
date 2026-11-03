@@ -15,6 +15,7 @@
 const { chromium } = require('playwright-core');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 
 /** 各平台适配信息（启发式，不依赖固定元素 id） */
 const ADAPTERS = {
@@ -314,6 +315,82 @@ function extractMarked(text) {
   return '';
 }
 
+/**
+ * 上传图片到 AI 输入框。
+ * 优先找 <input type=file accept=image> 用 setInputFiles；
+ * 没有就用 DataTransfer 模拟拖放（豆包网页版只支持拖放）。
+ * @param {object} page
+ * @param {string[]} dataUrls  base64 data URL 列表
+ */
+async function uploadImages(page, dataUrls) {
+  if (!dataUrls || !dataUrls.length) return false;
+
+  // 方式 1：找 accept 含 image 的 file input
+  let fileInput = null;
+  for (const frame of page.frames()) {
+    try {
+      const inputs = await frame.$$('input[type="file"]');
+      for (const inp of inputs) {
+        const accept = await inp.getAttribute('accept').catch(() => '');
+        if (accept && /image/i.test(accept)) { fileInput = inp; break; }
+      }
+      if (fileInput) break;
+    } catch (e) { /* try next frame */ }
+  }
+  if (!fileInput) {
+    for (const frame of page.frames()) {
+      try {
+        const inp = await frame.$('input[type="file"]');
+        if (inp) { fileInput = inp; break; }
+      } catch (e) { /* try next frame */ }
+    }
+  }
+
+  if (fileInput) {
+    // setInputFiles 只能吃本地路径，把 data URL 写成临时文件
+    const paths = dataUrls.map((u, i) => {
+      const m = u.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (!m) return null;
+      const ext = (m[1] === 'jpeg') ? 'jpg' : (m[1] === 'svg+xml' ? 'svg' : m[1]);
+      const p = path.join(os.tmpdir(), `tpoe-ai-${Date.now()}-${i}.${ext}`);
+      fs.writeFileSync(p, Buffer.from(m[2], 'base64'));
+      return p;
+    }).filter(Boolean);
+    if (paths.length) {
+      try {
+        await fileInput.setInputFiles(paths);
+        paths.forEach(p => { try { fs.unlinkSync(p); } catch (e) {} });
+        return true;
+      } catch (e) {
+        paths.forEach(p => { try { fs.unlinkSync(p); } catch (e) {} });
+        /* fallthrough to drag-drop */
+      }
+    }
+  }
+
+  // 方式 2：模拟拖放（豆包）——在页面里把 data URL 转成 File 后 dispatch drop
+  try {
+    await page.evaluate(async (urls) => {
+      const el = document.querySelector('div[contenteditable="true"], textarea');
+      if (!el) throw new Error('no editor element');
+      const files = [];
+      for (const url of urls) {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const mime = blob.type || 'image/png';
+        const ext = (mime.split('/')[1] || 'png').replace('jpeg', 'jpg');
+        files.push(new File([blob], `tpoe-img-${files.length}.${ext}`, { type: mime }));
+      }
+      const dt = new DataTransfer();
+      files.forEach(f => dt.items.add(f));
+      el.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    }, dataUrls);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, '');
 
 /** 回读校验：确认文字真的写进了页面 */
@@ -593,11 +670,13 @@ class AutoRunner {
    * AI 内容评分：打开豆包/DeepSeek 网页版，粘贴 prompt，抓取 AI 回复
    * @param {string} provider 'doubao' | 'deepseek'
    * @param {string} prompt  拼好的评分 prompt
+   * @param {string[]} [imageDataUrls] 要上传的素材图片（base64 data URL）
    * @param {string} [browserPref]
    * @param {Function} [emit]  进度回调
    */
-  async scoreContent(provider, prompt, browserPref, emit) {
+  async scoreContent(provider, prompt, imageDataUrls, browserPref, emit) {
     emit = emit || (() => {});
+    imageDataUrls = imageDataUrls || [];
     const adapter = AI_ADAPTERS[provider];
     if (!adapter) return { ok: false, error: '不支持的 AI：' + provider };
 
@@ -651,6 +730,18 @@ class AutoRunner {
         return false;
       }, 15000);
       if (!input) return { ok: false, stage: 'error', message: '找不到输入框，页面可能改版了' };
+
+      // 有素材图片 → 先上传图片（AI 能实际看到画面再评分）
+      if (imageDataUrls.length) {
+        emit({ stage: 'upload', message: `上传素材图片（${imageDataUrls.length} 张）…` });
+        const uploaded = await uploadImages(page, imageDataUrls);
+        if (!uploaded) {
+          // 上传失败不阻断，退化为纯文字评分
+          emit({ stage: 'upload', message: '图片上传失败，改用纯文字评分' });
+        } else {
+          await sleep(1500); // 等缩略图渲染
+        }
+      }
 
       await writeField(page, input, fullPrompt);
       await sleep(600);
