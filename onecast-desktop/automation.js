@@ -34,11 +34,13 @@ const ADAPTERS = {
     name: '小红书',
     url: 'https://creator.xiaohongshu.com/publish/publish?source=official',
     host: 'xiaohongshu.com',
-    imageTab: ['上传图文', '图文'],
-    videoTab: ['上传视频', '视频'],
+    imageTab: ['上传图文'],
+    videoTab: ['上传视频'],
     titleSelectors: ['input[placeholder*="标题"]', 'div[contenteditable="true"][data-placeholder*="标题"]'],
     bodySelectors: ['div[contenteditable="true"][data-placeholder*="正文"]', 'div[contenteditable="true"]'],
     submit: ['发布', '发布笔记'],
+    // 上传区提示文字：用来定位拖拽落点和点击触发 file input
+    uploadDropText: ['拖拽', '点击上传'],
     note: '标题上限 20 字；正文里的话题用 #话题# 形式'
   },
   bilibili: {
@@ -54,13 +56,16 @@ const ADAPTERS = {
   },
   weibo: {
     name: '微博',
-    url: 'https://weibo.com/compose',
+    // /compose 会跳回首页；发微博的输入框就在首页顶部
+    url: 'https://weibo.com/',
     host: 'weibo.com',
     imageTab: [],
     videoTab: [],
     titleSelectors: [],
     bodySelectors: ['div[contenteditable="true"]', 'textarea'],
     submit: ['发送', '发布'],
+    // 微博点「图片」按钮会弹系统文件框（Playwright 操作不了），
+    // 所以直接找隐藏的 file input，不触发按钮
     note: '正文 140 字；图片最多 9 张'
   },
   x: {
@@ -76,13 +81,16 @@ const ADAPTERS = {
   },
   instagram: {
     name: 'Instagram',
-    url: 'https://www.instagram.com/create/select/',
+    // create/select 不会自动弹上传框，需要先点左侧边栏「创建」
+    url: 'https://www.instagram.com/',
     host: 'instagram.com',
     imageTab: [],
     videoTab: [],
     titleSelectors: [],
     bodySelectors: ['div[aria-label*="caption" i]', 'textarea', 'div[contenteditable="true"]'],
     submit: ['Share', '分享', '发布'],
+    // 创建按钮文案（左侧边栏）
+    createTrigger: ['创建', 'Create', '新建'],
     note: '上传图片后在「分享」前可编辑说明文字；图片最多 10 张'
   },
   wechat: {
@@ -91,9 +99,12 @@ const ADAPTERS = {
     host: 'weixin.qq.com',
     imageTab: ['图文', '图片'],
     videoTab: ['视频'],
-    titleSelectors: ['input[placeholder*="标题"]', 'textarea[placeholder*="标题"]'],
-    bodySelectors: ['div[contenteditable="true"]', 'textarea[placeholder*="描述"]', 'textarea'],
+    // 视频号的「短标题」是可选项，不填；正文写进「视频描述」
+    titleSelectors: [],
+    bodySelectors: ['textarea[placeholder*="描述"]', 'div[contenteditable="true"][data-placeholder*="描述"]', 'div[contenteditable="true"]', 'textarea'],
     submit: ['发表', '发布', '创建'],
+    // 上传区提示文字
+    uploadDropText: ['上传', '拖拽', '点击'],
     note: '视频号助手网页版可发图文/视频；朋友圈无网页接口，贴图请手动'
   }
 };
@@ -523,12 +534,43 @@ class AutoRunner {
     const imagesOnly = files.length > 0 && files.every(f => /\.(png|jpe?g|webp|gif)$/i.test(f));
     const fields = { title: false, body: false, images: 0 };
 
+    // 0. Instagram 等：先点「创建」按钮弹出上传 modal
+    if (adapter.createTrigger && adapter.createTrigger.length) {
+      for (const t of adapter.createTrigger) {
+        if (await clickByText(page, [t])) { await sleep(2000); break; }
+      }
+    }
+
     // 1. 先切到正确的发布类型（图文 / 视频）
     const tabs = imagesOnly ? (adapter.imageTab || []) : (adapter.videoTab || []);
-    if (tabs.length && await clickByText(page, tabs)) await sleep(1500);
+    if (tabs.length) {
+      const clicked = await clickByText(page, tabs);
+      if (clicked) await sleep(1500);
+      // 小红书特殊：如果 URL 还停在 target=video，强制跳到图文页
+      if (adapter.host === 'xiaohongshu.com') {
+        try {
+          const cur = page.url();
+          if (imagesOnly && /target=video/.test(cur)) {
+            await page.goto('https://creator.xiaohongshu.com/publish/publish?source=official&target=note',
+              { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await sleep(1500);
+          }
+        } catch (e) { /* ignore */ }
+      }
+    }
 
-    // 2. 上传素材：优先 file input，失败则用拖拽兜底（小红书/微博等）
+    // 2. 上传素材
     if (files.length) {
+      // 2a. 先点上传区（按 uploadDropText 定位），让 file input 出现/获得焦点
+      if (adapter.uploadDropText && adapter.uploadDropText.length) {
+        for (const t of adapter.uploadDropText) {
+          try {
+            const loc = page.locator(`text=${t}`).first();
+            if (await loc.count()) { await loc.click({ timeout: 3000 }); await sleep(800); break; }
+          } catch (e) { /* try next */ }
+        }
+      }
+
       let input = await pickFileInput(page, imagesOnly ? 'image' : 'video');
       if (!input) {
         await sleep(1500);
@@ -544,14 +586,24 @@ class AutoRunner {
         } catch (e) { /* 走兜底 */ }
       }
       if (!uploaded) {
-        // 拖拽兜底：把 data URL 转成 File 模拟拖放
+        // 拖拽兜底：拖到「上传区」而不是文字编辑器
         try {
           const dataUrls = files.slice(0, 18).map(f => f.dataUrl).filter(Boolean);
           if (dataUrls.length) {
-            await page.evaluate(async (urls) => {
-              const input = document.querySelector('div[contenteditable="true"], textarea')
-                || document.activeElement;
-              if (!input) return;
+            const dropTexts = (adapter.uploadDropText || []).join('|');
+            await page.evaluate(async ({ urls, dropTexts }) => {
+              // 优先找上传区（含拖拽/点击上传文字的元素），否则退到 contenteditable
+              let target = null;
+              if (dropTexts) {
+                const els = [...document.querySelectorAll('div, section, span, p')];
+                for (const el of els) {
+                  if (new RegExp(dropTexts).test((el.innerText || '').trim()) && el.offsetWidth > 100) {
+                    target = el; break;
+                  }
+                }
+              }
+              if (!target) target = document.querySelector('div[contenteditable="true"], textarea') || document.activeElement;
+              if (!target) return;
               const files = [];
               for (const u of urls) {
                 const res = await fetch(u);
@@ -560,8 +612,8 @@ class AutoRunner {
               }
               const dt = new DataTransfer();
               files.forEach(f => dt.items.add(f));
-              input.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
-            }, dataUrls);
+              target.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+            }, { urls: dataUrls, dropTexts });
             await waitUntil(async () => (await countThumbs(page)) > before, 15000);
             uploaded = true;
           }

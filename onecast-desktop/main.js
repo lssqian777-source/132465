@@ -8,7 +8,7 @@ const os = require('node:os');
 // 公钥用于校验从 GitHub 拉取的 onecast.html，私钥仅在构建机上用于签名。
 // 若签名不匹配，本次更新会被丢弃，继续使用本地缓存或打包内置版本。
 const UPDATE_PUB_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEA6m7GStNt6muuKsNhWxGgEpJEXlYQiSqiKMMaM3mL4Xg=
+MCowBQYDK2VwAyEASqkAx0H7xZh7/XcvJbSh+VgB1WA6DgoJrQz8l3pUsbI=
 -----END PUBLIC KEY-----`;
 
 const HTML_SOURCES = [
