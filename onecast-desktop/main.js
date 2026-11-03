@@ -256,10 +256,13 @@ function registerAutoHandlers() {
     const emit = data => {
       if (!sender.isDestroyed()) sender.send('ai:progress', data);
     };
+    // 素材图片以 base64 data URL 形式直接传给评分引擎，由引擎内部处理上传
+    const imageDataUrls = Array.isArray(payload.images) ? payload.images.filter(u => /^data:image\//.test(String(u))) : [];
     try {
       const r = await getRunner().scoreContent(
         payload.provider,
         String(payload.prompt || ''),
+        imageDataUrls,
         payload.browser,
         emit
       );

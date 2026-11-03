@@ -2219,8 +2219,10 @@ async function runAIScore(){
     : '';
 
   // 拼接评分 prompt：标题 + 正文 + 标签 + 素材概况
+  // 图片会实际上传到 AI，所以这里只给素材数量说明，不重复文件名
+  const images=c.media.filter(m=>m.kind==='image'&&m.url).map(m=>m.url);
   const mediaInfo=c.media.length
-    ? `\n\n【素材】共 ${c.media.length} 个：${c.media.map(m=>m.name).slice(0,12).join('、')}${c.media.length>12?' 等':''}`
+    ? `\n\n【素材】共 ${c.media.length} 个，其中 ${images.length} 张图片已随消息上传，请你看完图片内容后再评分；其余为视频。`
     : '';
   const prompt=`你是一位资深自媒体内容运营专家。请对下面这条待发布内容进行专业评分和优化建议：
 
@@ -2228,12 +2230,13 @@ async function runAIScore(){
 【正文】${c.body||'(无)'}${c.tags?`\n【标签】${c.tags}`:''}${mediaInfo}${hotBlock? '\n'+hotBlock : ''}
 
 请按以下格式输出：
-1. 综合评分：X/10（并说明理由）
+1. 综合评分：X/10（并说明理由，需结合图片画面质量、构图、与文案匹配度）
 2. 标题吸引力：X/10 + 优化建议
 3. 正文质量：X/10 + 优化建议
-4. 平台适配：哪些平台适合发，哪些不适合，为什么
-5. 3 条可直接替换的优化标题
-6. 正文里需要修改的具体问题（逐条列出）${hotBlock?'\n7. 爆款横向对比：我的内容与各平台爆款的差距（差距点 + 可直接借鉴的写法）':''}
+4. 图片/画面分析：构图、清晰度、色彩、吸引力、是否需要重拍或替换
+5. 平台适配：哪些平台适合发，哪些不适合，为什么
+6. 3 条可直接替换的优化标题
+7. 正文里需要修改的具体问题（逐条列出）${hotBlock?'\n8. 爆款横向对比：我的内容与各平台爆款的差距（差距点 + 可直接借鉴的写法）':''}
 
 请直接给出评分和建议，不要寒暄。`;
 
@@ -2243,7 +2246,7 @@ async function runAIScore(){
     off=api.onProgress&&api.onProgress(data=>{
       if(data&&data.message) statusEl.textContent=data.message;
     });
-    const res=await api.score({provider,prompt,browser:state.settings.browser||'auto'});
+    const res=await api.score({provider,prompt,images,browser:state.settings.browser||'auto'});
     if(res.ok){
       resultEl.style.display='block';
       resultEl.textContent=res.text||'(无内容)';
