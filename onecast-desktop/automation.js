@@ -28,19 +28,22 @@ const ADAPTERS = {
     titleSelectors: ['input[placeholder*="标题"]', 'input[placeholder*="作品"]'],
     bodySelectors: ['div[contenteditable="true"]', 'textarea[placeholder*="简介"]'],
     submit: ['发布', '立即发布'],
+    musicSearch: true,
     note: '图文最多 35 张；封面在发布页单独设置'
   },
   xiaohongshu: {
     name: '小红书',
+    // 图文直接进 target=image 上传页，视频进 target=video；由 fillOne 按素材类型跳转
     url: 'https://creator.xiaohongshu.com/publish/publish?source=official',
     host: 'xiaohongshu.com',
-    imageTab: ['上传图文'],
-    videoTab: ['上传视频'],
+    imageTab: [],
+    videoTab: [],
     titleSelectors: ['input[placeholder*="标题"]', 'div[contenteditable="true"][data-placeholder*="标题"]'],
     bodySelectors: ['div[contenteditable="true"][data-placeholder*="正文"]', 'div[contenteditable="true"]'],
     submit: ['发布', '发布笔记'],
-    // 上传区提示文字：用来定位拖拽落点和点击触发 file input
-    uploadDropText: ['拖拽', '点击上传'],
+    // 拖拽兜底的落点文字（注意：绝不能点击上传区，会弹系统文件框）
+    uploadDropText: ['拖拽或点击上传', '点击上传', '拖拽'],
+    titleLimit: 20,
     note: '标题上限 20 字；正文里的话题用 #话题# 形式'
   },
   bilibili: {
@@ -95,17 +98,22 @@ const ADAPTERS = {
   },
   wechat: {
     name: '微信（视频号/贴图）',
-    url: 'https://channels.weixin.qq.com/platform/post/create',
+    // 先进图文管理列表页，点「发表图文」按钮打开编辑器
+    url: 'https://channels.weixin.qq.com/platform/post/finderNewLifePostList',
     host: 'weixin.qq.com',
-    imageTab: ['图文', '图片'],
-    videoTab: ['视频'],
-    // 视频号的「短标题」是可选项，不填；正文写进「视频描述」
-    titleSelectors: [],
+    imageTab: [],
+    videoTab: [],
+    // 点右上角橙色「发表图文」按钮进入编辑器
+    createTrigger: ['发表图文'],
+    // 编辑器字段：图文标题（22 字）+ 图文描述（1000 字）
+    titleSelectors: ['input[placeholder*="标题"]', 'textarea[placeholder*="标题"]', 'input[aria-label*="标题"]', 'input[maxlength="22"]'],
     bodySelectors: ['textarea[placeholder*="描述"]', 'div[contenteditable="true"][data-placeholder*="描述"]', 'div[contenteditable="true"]', 'textarea'],
     submit: ['发表', '发布', '创建'],
-    // 上传区提示文字
-    uploadDropText: ['上传', '拖拽', '点击'],
-    note: '视频号助手网页版可发图文/视频；朋友圈无网页接口，贴图请手动'
+    // 拖拽兜底的落点文字（+ 上传区：最多 18 张图）
+    uploadDropText: ['上传图片', '拖拽', '上传'],
+    titleLimit: 22,
+    musicSearch: true,
+    note: '图文最多 18 张；标题上限 22 字；朋友圈无网页接口，贴图请手动'
   }
 };
 
@@ -541,36 +549,24 @@ class AutoRunner {
       }
     }
 
-    // 1. 先切到正确的发布类型（图文 / 视频）
-    const tabs = imagesOnly ? (adapter.imageTab || []) : (adapter.videoTab || []);
-    if (tabs.length) {
-      const clicked = await clickByText(page, tabs);
-      if (clicked) await sleep(1500);
-      // 小红书特殊：如果 URL 还停在 target=video，强制跳到图文页
-      if (adapter.host === 'xiaohongshu.com') {
-        try {
-          const cur = page.url();
-          if (imagesOnly && /target=video/.test(cur)) {
-            await page.goto('https://creator.xiaohongshu.com/publish/publish?source=official&target=note',
-              { waitUntil: 'domcontentloaded', timeout: 30000 });
-            await sleep(1500);
-          }
-        } catch (e) { /* ignore */ }
-      }
+    // 1. 进入正确的发布类型页（图文 / 视频）
+    if (adapter.host === 'xiaohongshu.com') {
+      // 小红书：直接用官方 URL 参数进对应上传页，不点 tab（点上传区会弹系统文件框）
+      const target = imagesOnly ? 'image' : 'video';
+      const want = `https://creator.xiaohongshu.com/publish/publish?source=official&from=tab_switch&target=${target}`;
+      try {
+        if (!page.url().includes(`target=${target}`)) {
+          await page.goto(want, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await sleep(2000);
+        }
+      } catch (e) { /* ignore */ }
+    } else {
+      const tabs = imagesOnly ? (adapter.imageTab || []) : (adapter.videoTab || []);
+      if (tabs.length && await clickByText(page, tabs)) await sleep(1500);
     }
 
-    // 2. 上传素材
+    // 2. 上传素材（注意：绝不点击上传区按钮，会触发系统原生文件框）
     if (files.length) {
-      // 2a. 先点上传区（按 uploadDropText 定位），让 file input 出现/获得焦点
-      if (adapter.uploadDropText && adapter.uploadDropText.length) {
-        for (const t of adapter.uploadDropText) {
-          try {
-            const loc = page.locator(`text=${t}`).first();
-            if (await loc.count()) { await loc.click({ timeout: 3000 }); await sleep(800); break; }
-          } catch (e) { /* try next */ }
-        }
-      }
-
       let input = await pickFileInput(page, imagesOnly ? 'image' : 'video');
       if (!input) {
         await sleep(1500);
@@ -641,13 +637,14 @@ class AutoRunner {
     const tags = tagList.map(t => '#' + t).join(' ');
     const bodyText = [body, tags].filter(Boolean).join('\n');
 
-    // 4. 标题
+    // 4. 标题（按平台字数上限截断：小红书 20、视频号 22，默认 80）
     const titleEl = (adapter.titleSelectors || []).length
       ? await findField(page, adapter.titleSelectors)
       : null;
     if (titleEl && title) {
-      await writeField(page, titleEl, title.slice(0, 80));
-      fields.title = await verifyField(titleEl, title.slice(0, 80));
+      const t = title.slice(0, adapter.titleLimit || 80);
+      await writeField(page, titleEl, t);
+      fields.title = await verifyField(titleEl, t);
     }
 
     // 5. 正文：没有独立标题框的平台（微博 / X）把标题并进正文
@@ -663,10 +660,12 @@ class AutoRunner {
   }
 
   /**
-   * 抖音：按音乐名搜索并选用第一个结果。找不到就跳过（不报错）。
-   * 抖音创作页有「搜索音乐」输入框，输入后结果列表每项有「使用」按钮。
+   * 按音乐名搜索并选用第一个结果。找不到就跳过（不报错）。
+   * 抖音：创作页「搜索音乐」输入框 + 「使用」按钮。
+   * 视频号：图文编辑器「音乐」行 → 弹出选歌面板 → 搜索 → 选第一首。
    */
-  async selectMusic(page, name) {
+  async selectMusic(page, name, pid) {
+    if (pid === 'wechat') return this.selectMusicWechat(page, name);
     try {
       // 1. 找到音乐搜索输入框
       const search = await page.evaluateHandle(() => {
@@ -714,6 +713,56 @@ class AutoRunner {
     }
   }
 
+  /** 视频号：图文编辑器里点「音乐」行 → 搜索 → 选第一首（启发式，失败静默跳过） */
+  async selectMusicWechat(page, name) {
+    try {
+      // 1. 点「音乐」那一行（精确匹配，避免误点别处）
+      const opened = await page.evaluate(() => {
+        const els = [...document.querySelectorAll('div, span, label')];
+        for (const el of els) {
+          const t = (el.innerText || '').trim();
+          if (t === '音乐' && el.offsetWidth > 0 && el.offsetHeight > 0) {
+            const clickTarget = el.closest('[class*="row"], [class*="item"], div');
+            (clickTarget || el).click();
+            return true;
+          }
+        }
+        return false;
+      }).catch(() => false);
+      if (!opened) return false;
+      await sleep(1500);
+      // 2. 弹出的选歌面板里找搜索框
+      const inp = page.locator('input[placeholder*="搜索"], input[placeholder*="歌名"], input[placeholder*="音乐"]').first();
+      if (!await inp.count()) return false;
+      await inp.fill(name);
+      await inp.press('Enter');
+      await sleep(2000);
+      // 3. 选第一首：点「使用/使用音乐/完成」类按钮；没有就点第一行结果
+      const picked = await page.evaluate(() => {
+        const btns = [...document.querySelectorAll('button, [role="button"], span, a')];
+        for (const b of btns) {
+          const t = (b.innerText || '').trim();
+          if (/^(使用|使用音乐|添加|选这首|完成)$/.test(t)) { b.click(); return true; }
+        }
+        return false;
+      }).catch(() => false);
+      if (picked) {
+        await sleep(800);
+        // 有的面板选完还要点一次「完成/确定」
+        await page.evaluate(() => {
+          const btns = [...document.querySelectorAll('button, [role="button"]')];
+          for (const b of btns) {
+            const t = (b.innerText || '').trim();
+            if (/^(完成|确定|确认)$/.test(t)) { b.click(); return; }
+          }
+        }).catch(() => {});
+      }
+      return picked;
+    } catch (e) {
+      return false;
+    }
+  }
+
   async runOne(pid, job, opts, emit) {
     const adapter = ADAPTERS[pid];
     if (!adapter) {
@@ -730,9 +779,20 @@ class AutoRunner {
       emit({ pid, stage: 'open', message: `打开${adapter.name}创作中心` });
       await page.goto(adapter.url, { waitUntil: 'domcontentloaded', timeout: 35000 });
 
-      // 登录态检测：被带到登录页说明该工作台还没登录过这个平台
+      // 登录态检测：URL 跳到登录页，或页面里出现扫码/登录框，都算未登录
       const url = page.url();
-      if (/login|passport|signin|accounts\./i.test(url)) {
+      let needLogin = /login|passport|signin|accounts\.|newlogin/i.test(url);
+      if (!needLogin) {
+        // 检查页面内容：抖音等平台 URL 不变但弹登录遮罩
+        needLogin = await page.evaluate(() => {
+          const body = document.body ? (document.body.innerText || '') : '';
+          if (/扫码登录|扫码登|请输入手机号|验证码登录|密码登录/.test(body)) return true;
+          // 二维码图片也是登录标志
+          const imgs = document.querySelectorAll('img[src*="qrcode"], img[src*="qr-code"]');
+          return imgs.length > 0;
+        }).catch(() => false);
+      }
+      if (needLogin) {
         const shot = await this.shot(page, pid + '-need-login');
         await page.bringToFront().catch(() => {});
         return { pid, ok: false, stage: 'login', shot,
@@ -743,10 +803,10 @@ class AutoRunner {
       emit({ pid, stage: 'upload', message: '上传素材并填写文案' });
       const r = await this.fillOne(page, adapter, job);
 
-      // 视频平台自动配乐（目前支持抖音）：按用户填的音乐名搜索并选用第一个
-      if (pid === 'douyin' && job.content && job.content.music) {
+      // 自动配乐（抖音/视频号）：按用户填的音乐名搜索并选用第一个，失败静默跳过
+      if (adapter.musicSearch && job.content && job.content.music) {
         emit({ pid, stage: 'music', message: `搜索配乐「${job.content.music}」` });
-        const musicOk = await this.selectMusic(page, String(job.content.music));
+        const musicOk = await this.selectMusic(page, String(job.content.music), pid);
         if (musicOk) r.music = true;
       }
 
