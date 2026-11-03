@@ -8,7 +8,7 @@ const os = require('node:os');
 // 公钥用于校验从 GitHub 拉取的 onecast.html，私钥仅在构建机上用于签名。
 // 若签名不匹配，本次更新会被丢弃，继续使用本地缓存或打包内置版本。
 const UPDATE_PUB_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAkvTr5RhWYhelnwlUAgFYK3uIAHKgN1naRkd/DceY28g=
+MCowBQYDK2VwAyEAbhdX49O7HNHfWzcyqq9zQk61U0UYYDDpMOhNOEjDSF8=
 -----END PUBLIC KEY-----`;
 
 const HTML_SOURCES = [
@@ -268,6 +268,51 @@ function registerAutoHandlers() {
       return { ok: false, stage: 'error', error: String(e.message || e) };
     }
   });
+
+  // 拉取平台热榜/爆款（不登录、不调付费接口）
+  ipcMain.handle('ai:hot', async (event, source) => {
+    try {
+      return await fetchHotList(String(source || 'douyin'));
+    } catch (e) {
+      return { ok: false, error: String(e.message || e) };
+    }
+  });
+}
+
+/** 拉取热榜数据：抖音 / 微博 / B站 */
+async function fetchHotList(source) {
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    if (source === 'douyin') {
+      const r = await fetch('https://www.iesdouyin.com/web/api/v2/hotsearch/billboard/word/', {
+        headers: { 'User-Agent': UA }, signal: ctrl.signal
+      });
+      const j = await r.json();
+      const items = (j.word_list || []).slice(0, 20).map(x => ({ title: x.word, hot: x.hot_value || 0 }));
+      return { ok: true, source, items };
+    }
+    if (source === 'weibo') {
+      const r = await fetch('https://weibo.com/ajax/side/hotSearch', {
+        headers: { 'User-Agent': UA, Referer: 'https://weibo.com/' }, signal: ctrl.signal
+      });
+      const j = await r.json();
+      const items = (j.data && j.data.realtime || []).slice(0, 20).map(x => ({ title: x.word || x.note, hot: x.num || x.raw_hot || 0 }));
+      return { ok: true, source, items };
+    }
+    if (source === 'bilibili') {
+      const r = await fetch('https://api.bilibili.com/x/web-interface/popular?ps=20&pn=1', {
+        headers: { 'User-Agent': UA, Referer: 'https://www.bilibili.com/' }, signal: ctrl.signal
+      });
+      const j = await r.json();
+      const items = ((j.data && j.data.list) || []).slice(0, 20).map(x => ({ title: x.title, hot: (x.stat && x.stat.view) || 0 }));
+      return { ok: true, source, items };
+    }
+    return { ok: false, error: '不支持的热榜来源：' + source };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 
