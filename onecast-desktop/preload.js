@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('onecastAuto', {
   run: (payload) => ipcRenderer.invoke('auto:run', payload),
   cancel: () => ipcRenderer.invoke('auto:cancel'),
   openWorkbench: (pref) => ipcRenderer.invoke('auto:workbench', pref),
+  openUrl: (url, pref) => ipcRenderer.invoke('auto:open-url', { url, browser: pref }),
   onProgress: (cb) => {
     const handler = (_e, data) => cb(data);
     ipcRenderer.on('auto:progress', handler);
