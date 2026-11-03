@@ -621,8 +621,9 @@ class AutoRunner {
       }
 
       emit({ stage: 'input', message: '写入评分内容' });
-      // 等输入框出现
-      const input = await waitUntil(async () => {
+      // 等输入框出现（注意：waitUntil 只返回布尔值，元素要单独接住）
+      let input = null;
+      await waitUntil(async () => {
         for (const sel of adapter.inputSelectors) {
           for (const frame of page.frames()) {
             try {
@@ -633,12 +634,15 @@ class AutoRunner {
                   const cs = getComputedStyle(e);
                   return { vis: cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0, w: r.width, h: r.height };
                 }).catch(() => null);
-                if (info && info.vis && info.w > 50 && info.h > 20) return el;
+                if (info && info.vis && info.w > 50 && info.h > 20) {
+                  input = el;
+                  return true;
+                }
               }
             } catch (e) { /* try next */ }
           }
         }
-        return null;
+        return false;
       }, 15000);
       if (!input) return { ok: false, stage: 'error', message: '找不到输入框，页面可能改版了' };
 
