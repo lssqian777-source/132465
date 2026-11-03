@@ -561,7 +561,10 @@ video.pv-media{background:#000}
     <section class="card card-pad">
       <div class="step-head">
         <div class="step-left"><span class="step-num">2</span><h2>文案</h2></div>
-        <span class="hint">按平台限制实时校验，可在下方逐平台覆盖</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="hint">按平台限制实时校验，可在下方逐平台覆盖</span>
+          <button class="btn mini ghost" id="btnClearContent" title="清空标题、正文、标签、素材">清空内容</button>
+        </div>
       </div>
       <div class="field">
         <label>标题 <span class="cnt" id="titleCnt">0 / 80</span></label>
@@ -1050,6 +1053,21 @@ const IDB={
 };
 function fileToDataURL(file){ return new Promise((res,rej)=>{
   const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsDataURL(file); });}
+
+/** 把图片 data URL 压缩成指定宽度的缩略图 data URL */
+function makeThumb(dataUrl,maxW){ return new Promise((res)=>{
+  const img=new Image();
+  img.onload=()=>{
+    const scale=Math.min(1,maxW/img.width);
+    const w=Math.round(img.width*scale), h=Math.round(img.height*scale);
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+    res(cv.toDataURL('image/jpeg',0.7));
+  };
+  img.onerror=()=>res('');
+  img.src=dataUrl;
+});}
+
 async function loadMediaLibrary(){
   if(!await IDB.open()) return;
   try{
@@ -2304,12 +2322,22 @@ function findDuplicate(title,body){
 
 async function recordPublish(entry){
   const c=state.content;
+  // 保存前 9 张素材的压缩缩略图（≤200px），用于历史记录预览和复用
+  const mediaThumbs=[];
+  const imgs=(c.media||[]).filter(m=>m.kind==='image'&&m.url).slice(0,9);
+  for(const m of imgs){
+    try{
+      const thumb=await makeThumb(m.url,200);
+      if(thumb) mediaThumbs.push({id:m.id,name:m.name,url:thumb});
+    }catch(e){ /* 跳过压缩失败的 */ }
+  }
   const rec={
     id:uid(), ts:Date.now(),
     title:String(c.title||''), body:String(c.body||''), tags:String(c.tags||''),
     platforms:entry.platforms||[], mode:entry.mode||'pack', status:entry.status||'',
     mediaIds:(c.media||[]).map(m=>m.id), mediaCount:(c.media||[]).length,
-    cover:c.cover?c.cover.name:''
+    cover:c.cover?c.cover.name:'',
+    mediaThumbs
   };
   state.history.unshift(rec);
   if(state.history.length>200) state.history.length=200;
@@ -2342,14 +2370,16 @@ function renderHistory(){
 function openHistoryDetail(id){
   const r=state.history.find(x=>x.id===id); if(!r) return;
   const modeLabel={pack:'发布包（手动）',fill:'自动填表',submit:'自动提交',dryrun:'演练',live:'后端提交'}[r.mode]||r.mode;
+  const thumbs=(r.mediaThumbs||[]).map(t=>`<img src="${t.url}" alt="${escAttr(t.name)}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--line)">`).join('');
   const body=`
     <div class="gate-box"><b>${esc(histTitle(r))}</b><br>${esc(histTime(r.ts))} · ${esc(modeLabel)} · ${r.mediaCount} 个素材${r.cover?' · 封面 '+esc(r.cover):''}</div>
+    ${thumbs?`<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">${thumbs}</div>`:''}
     <div class="pack-media" style="margin-top:10px"><b style="color:var(--txt)">平台</b><br>${(r.platforms||[]).map(pid=>esc((getPlatform(pid)||{}).name||pid)).join('、')||'未记录'}</div>
     ${r.body?`<div class="pack-media" style="margin-top:10px"><b style="color:var(--txt)">正文</b><br>${esc(r.body).slice(0,800)}</div>`:''}
     ${r.tags?`<div class="pack-media" style="margin-top:10px"><b style="color:var(--txt)">话题</b><br>${esc(r.tags)}</div>`:''}
     ${r.status?`<div class="warn-box">${esc(r.status)}</div>`:''}`;
   openModal('发布记录','对照历史，避免重复内容',body,
-    '<button class="btn ghost" data-hist-del>删除</button><button class="btn primary" data-hist-reuse>复用此文案</button>');
+    '<button class="btn ghost" data-hist-del>删除</button><button class="btn primary" data-hist-reuse>复用此内容</button>');
   $('[data-hist-reuse]').onclick=()=>reuseRecord(r);
   $('[data-hist-del]').onclick=()=>deleteRecord(r.id);
 }
@@ -2359,10 +2389,18 @@ function reuseRecord(r){
   $('#titleInput').value=state.content.title;
   $('#bodyInput').value=state.content.body;
   $('#tagsInput').value=state.content.tags;
-  updateCounters();
-  const missing=(r.mediaIds||[]).filter(id=>!(state.content.media||[]).some(m=>m.id===id)).length;
+  // 恢复素材：优先用历史记录里的缩略图（小图），如果本地素材库还有原图则用原图
+  const restored=[];
+  if(r.mediaThumbs&&r.mediaThumbs.length){
+    for(const t of r.mediaThumbs){
+      const local=(state.content.media||[]).find(m=>m.id===t.id&&m.url);
+      restored.push(local||{id:t.id,name:t.name,size:0,type:'image/jpeg',kind:'image',hash:'',url:t.url});
+    }
+  }
+  if(restored.length) state.content.media=restored;
+  updateCounters(); renderMedia();
   closeModal();
-  toast('已复用旧文案',missing?missing+' 个素材已从素材库移除，请重新添加':'标题、正文、话题已填入，可直接修改后发布',missing?'warn':'ok');
+  toast('已复用',restored.length?`标题、正文、话题、${restored.length} 张素材已恢复，可直接修改后发布`:'标题、正文、话题已填入，可直接修改后发布','ok');
 }
 
 async function deleteRecord(id){
@@ -2536,6 +2574,19 @@ function bindEvents(){
     state.selected=new Set();
     $('#checkAll').checked=false;
     renderMatrix(); renderHero();
+  };
+
+  $('#btnClearContent').onclick=async ()=>{
+    if(!state.content.title&&!state.content.body&&!state.content.tags&&!state.content.media.length){
+      toast('已经是空的','','ok'); return;
+    }
+    if(!(await askConfirm({title:'清空当前内容',text:'将清空标题、正文、标签和所有素材，此操作不可撤销。历史发布记录不受影响。',okText:'清空'}))) return;
+    state.content.title=''; state.content.body=''; state.content.tags='';
+    state.content.media=[]; state.content.cover=null;
+    $('#titleInput').value=''; $('#bodyInput').value=''; $('#tagsInput').value='';
+    renderMedia(); updateCounters(); renderHero(); updatePublishButton();
+    persistContent();
+    toast('已清空','可以开始写新内容了','ok');
   };
 
   $('#freeSwitch').onclick=()=>{
