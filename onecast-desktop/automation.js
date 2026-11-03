@@ -98,6 +98,58 @@ const ADAPTERS = {
   }
 };
 
+/** AI 评分适配器：用网页版聊天（免费，不调 API） */
+const AI_ADAPTERS = {
+  doubao: {
+    name: '豆包',
+    url: 'https://www.doubao.com/chat/',
+    host: 'doubao.com',
+    // 输入框：contenteditable 或 textarea
+    inputSelectors: ['div[contenteditable="true"]', 'textarea'],
+    // 发送按钮：按文本或 aria-label 找
+    sendLabels: ['发送', 'Send', '发送消息'],
+    // 回复：取最后一条 AI 消息的文本
+    replyEval: () => {
+      // 豆包的消息流：找所有消息块，取最后一个非用户的
+      const all = document.querySelectorAll('[data-message-author-role], [class*="message"], [class*="msg"]');
+      let last = '';
+      for (const el of all) {
+        const role = el.getAttribute('data-message-author-role') || '';
+        const txt = (el.innerText || el.textContent || '').trim();
+        if (txt && txt.length > 5 && role !== 'user') last = txt;
+      }
+      // 兜底：取页面里最长的文本块
+      if (!last) {
+        const blocks = document.querySelectorAll('div, p, article');
+        let best = '';
+        for (const b of blocks) {
+          const t = (b.innerText || '').trim();
+          if (t.length > best.length && t.length < 4000) best = t;
+        }
+        last = best;
+      }
+      return last;
+    }
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    url: 'https://chat.deepseek.com/',
+    host: 'deepseek.com',
+    inputSelectors: ['textarea', 'div[contenteditable="true"]'],
+    sendLabels: ['发送', 'Send', '发送消息'],
+    replyEval: () => {
+      // DeepSeek 消息流
+      const all = document.querySelectorAll('[class*="message"], [class*="chat"], [class*="response"]');
+      let last = '';
+      for (const el of all) {
+        const txt = (el.innerText || el.textContent || '').trim();
+        if (txt && txt.length > 5 && txt.length < 4000) last = txt;
+      }
+      return last;
+    }
+  }
+};
+
 /** 查找本机 Chrome / Edge 可执行文件
  * @param {'auto'|'chrome'|'edge'} [preference='auto'] 用户偏好的浏览器
  */
@@ -532,6 +584,116 @@ class AutoRunner {
     }
     return results;
   }
+
+  /**
+   * AI 内容评分：打开豆包/DeepSeek 网页版，粘贴 prompt，抓取 AI 回复
+   * @param {string} provider 'doubao' | 'deepseek'
+   * @param {string} prompt  拼好的评分 prompt
+   * @param {string} [browserPref]
+   * @param {Function} [emit]  进度回调
+   */
+  async scoreContent(provider, prompt, browserPref, emit) {
+    emit = emit || (() => {});
+    const adapter = AI_ADAPTERS[provider];
+    if (!adapter) return { ok: false, error: '不支持的 AI：' + provider };
+
+    let page = null;
+    try {
+      emit({ stage: 'open', message: `打开${adapter.name}` });
+      // 每个 AI 用单独的标签页（key = ai:doubao），复用登录态
+      page = this.pages.get('ai:' + provider);
+      if (page && page.isClosed && page.isClosed()) page = null;
+      const ctx = await this.ensureContext(browserPref);
+      if (!page) {
+        page = await ctx.newPage();
+        this.pages.set('ai:' + provider, page);
+        page.on('close', () => this.pages.delete('ai:' + provider));
+      }
+      await page.goto(adapter.url, { waitUntil: 'domcontentloaded', timeout: 40000 });
+      await sleep(1500);
+
+      // 登录态检测
+      const url = page.url();
+      if (/login|passport|signin|accounts\./i.test(url)) {
+        await page.bringToFront().catch(() => {});
+        return { ok: false, stage: 'login',
+          message: `需要先在自动发布工作台登录${adapter.name}（窗口已打开，登录后重新评分即可）` };
+      }
+
+      emit({ stage: 'input', message: '写入评分内容' });
+      // 等输入框出现
+      const input = await waitUntil(async () => {
+        for (const sel of adapter.inputSelectors) {
+          for (const frame of page.frames()) {
+            try {
+              const els = await frame.$$(sel);
+              for (const el of els) {
+                const info = await el.evaluate(e => {
+                  const r = e.getBoundingClientRect();
+                  const cs = getComputedStyle(e);
+                  return { vis: cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0, w: r.width, h: r.height };
+                }).catch(() => null);
+                if (info && info.vis && info.w > 50 && info.h > 20) return el;
+              }
+            } catch (e) { /* try next */ }
+          }
+        }
+        return null;
+      }, 15000);
+      if (!input) return { ok: false, stage: 'error', message: '找不到输入框，页面可能改版了' };
+
+      await writeField(page, input, prompt);
+      await sleep(600);
+
+      emit({ stage: 'send', message: '发送给 AI' });
+      // 点发送按钮：先尝试按文本，再尝试 aria-label，最后按回车
+      let sent = await clickByText(page, adapter.sendLabels);
+      if (!sent) {
+        // 尝试找带发送 aria-label 的按钮
+        for (const frame of page.frames()) {
+          try {
+            const btn = await frame.$('button[aria-label*="发送"], button[aria-label*="Send"], [role="button"][aria-label*="发送"]');
+            if (btn) { await btn.click(); sent = true; break; }
+          } catch (e) { /* try next frame */ }
+        }
+      }
+      if (!sent) {
+        // 兜底：在输入框里按 Ctrl+Enter 或 Enter
+        await input.focus().catch(() => {});
+        await page.keyboard.press('Enter');
+        sent = true;
+      }
+
+      emit({ stage: 'wait', message: '等待 AI 回复…' });
+      // 等待回复完成：每隔 1.5s 抓取最后一条回复，连续 3 次长度不变认为完成
+      let lastText = '';
+      let stable = 0;
+      const deadline = Date.now() + 120000;
+      await sleep(3000); // 先等 AI 开始输出
+      while (Date.now() < deadline) {
+        await sleep(1500);
+        const cur = await page.evaluate(adapter.replyEval).catch(() => '');
+        if (cur && cur.length > lastText.length) {
+          lastText = cur;
+          stable = 0;
+          emit({ stage: 'wait', message: 'AI 正在回复…（' + cur.length + ' 字）' });
+        } else if (cur && cur === lastText) {
+          stable++;
+          if (stable >= 3) break; // 连续 3 次不变 → 完成
+        }
+      }
+
+      if (!lastText) return { ok: false, stage: 'error', message: '没有收到 AI 回复' };
+
+      await page.bringToFront().catch(() => {});
+      return { ok: true, stage: 'done', text: lastText,
+        message: `${adapter.name} 评分完成（${lastText.length} 字）` };
+    } catch (e) {
+      const shot = page ? await this.shot(page, 'ai-' + provider + '-error') : '';
+      return { ok: false, stage: 'error', shot, message: 'AI 评分出错：' + (e.message || e).slice(0, 120) };
+    }
+    // 不关闭 page，保留登录态
+  }
 }
 
-module.exports = { AutoRunner, ADAPTERS, findBrowser };
+module.exports = { AutoRunner, ADAPTERS, AI_ADAPTERS, findBrowser };

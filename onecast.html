@@ -620,6 +620,26 @@ video.pv-media{background:#000}
 
   <!-- 右栏 -->
   <aside class="rail-right">
+    <section class="card card-pad" id="aiScoreCard">
+      <div class="card-head">
+        <div class="card-title"><span class="line"></span>AI 内容评分 <span class="sub">免费 · 豆包/DeepSeek</span></div>
+      </div>
+      <div class="field" style="margin-bottom:8px">
+        <label>选择 AI</label>
+        <select class="sel" id="aiProvider">
+          <option value="doubao">豆包（doubao.com）</option>
+          <option value="deepseek">DeepSeek（chat.deepseek.com）</option>
+        </select>
+      </div>
+      <button class="btn primary" id="btnAIScore" style="width:100%;margin-bottom:10px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        开始评分
+      </button>
+      <div class="ai-status" id="aiStatus" style="display:none;font-size:11.5px;color:var(--muted);margin-bottom:8px;padding:6px 8px;background:var(--panel2);border-radius:7px;border:1px solid var(--line)"></div>
+      <div class="ai-result" id="aiResult" style="display:none;max-height:340px;overflow:auto;font-size:12px;line-height:1.65;color:var(--txt);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word"></div>
+      <div class="inline-hint" style="margin-top:7px">首次使用会打开浏览器窗口，请在里面登录豆包/DeepSeek，登录态长期保留。</div>
+    </section>
+
     <section class="card card-pad">
       <div class="card-head">
         <div class="card-title"><span class="line"></span>安全等级</div>
@@ -2119,6 +2139,68 @@ async function runAutoFillOne(pid,btn){
   }
 }
 
+/* AI 内容评分：把当前文案+素材描述发给豆包/DeepSeek 网页版，抓取评分结果 */
+async function runAIScore(){
+  const api=window.onecastAI;
+  if(!api){ toast('AI 评分不可用','只有桌面版能驱动浏览器','err'); return; }
+  const c=state.content;
+  if(!c.title&&!c.body){ toast('没有内容','请先填写标题或正文','warn'); return; }
+  const provider=$('#aiProvider').value;
+  const btn=$('#btnAIScore');
+  const statusEl=$('#aiStatus');
+  const resultEl=$('#aiResult');
+
+  // 拼接评分 prompt：标题 + 正文 + 标签 + 素材概况
+  const mediaInfo=c.media.length
+    ? `\n\n【素材】共 ${c.media.length} 个：${c.media.map(m=>m.name).slice(0,12).join('、')}${c.media.length>12?' 等':''}`
+    : '';
+  const prompt=`你是一位资深自媒体内容运营专家。请对下面这条待发布内容进行专业评分和优化建议：
+
+【标题】${c.title||'(无)'}
+【正文】${c.body||'(无)'}${c.tags?`\n【标签】${c.tags}`:''}${mediaInfo}
+
+请按以下格式输出：
+1. 综合评分：X/10（并说明理由）
+2. 标题吸引力：X/10 + 优化建议
+3. 正文质量：X/10 + 优化建议
+4. 平台适配：哪些平台适合发，哪些不适合，为什么
+5. 3 条可直接替换的优化标题
+6. 正文里需要修改的具体问题（逐条列出）
+
+请直接给出评分和建议，不要寒暄。`;
+
+  btn.disabled=true; btn.textContent='评分中…';
+  statusEl.style.display='block'; statusEl.textContent='准备中…';
+  resultEl.style.display='none';
+  let off;
+  try{
+    off=api.onProgress&&api.onProgress(data=>{
+      if(data&&data.message) statusEl.textContent=data.message;
+    });
+    const res=await api.score({provider,prompt,browser:state.settings.browser||'auto'});
+    if(res.ok){
+      resultEl.style.display='block';
+      resultEl.textContent=res.text||'(无内容)';
+      statusEl.textContent='评分完成 ✓';
+      toast('AI 评分完成',provider==='doubao'?'豆包':'DeepSeek'+' 已给出评分','ok');
+    }else{
+      statusEl.textContent=res.message||res.error||'评分失败';
+      toast('AI 评分未完成',res.message||res.error||'','warn');
+      if(res.stage==='login'){
+        // 登录态失效，提示用户去工作台登录
+        resultEl.style.display='block';
+        resultEl.textContent='需要先在打开的浏览器窗口里登录 '+(provider==='doubao'?'豆包':'DeepSeek')+'，登录后重新点「开始评分」即可。';
+      }
+    }
+  }catch(e){
+    statusEl.textContent='出错：'+String(e.message||e).slice(0,60);
+    toast('AI 评分出错',String(e.message||e),'err');
+  }finally{
+    if(off) off();
+    btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> 开始评分';
+  }
+}
+
 async function runPublish(pids){
   state.running=true; state.jobs={}; updatePublishButton();
   const dry=state.settings.dryRun;
@@ -2466,6 +2548,7 @@ function bindEvents(){
   };
   $('#btnPublish').onclick=openPublishConfirm;
   $('#btnHistoryAll').onclick=openHistoryAll;
+  $('#btnAIScore').onclick=runAIScore;
   $('#btnSaveDraft').onclick=()=>{
     persistContent(); persistAccounts();
     toast('草稿已保存','文案与平台适配已写入本机','ok');

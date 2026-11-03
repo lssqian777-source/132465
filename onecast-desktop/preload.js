@@ -8,10 +8,20 @@ contextBridge.exposeInMainWorld('onecastAuto', {
   status: () => ipcRenderer.invoke('auto:status'),
   run: (payload) => ipcRenderer.invoke('auto:run', payload),
   cancel: () => ipcRenderer.invoke('auto:cancel'),
-  openWorkbench: () => ipcRenderer.invoke('auto:workbench'),
+  openWorkbench: (pref) => ipcRenderer.invoke('auto:workbench', pref),
   onProgress: (cb) => {
     const handler = (_e, data) => cb(data);
     ipcRenderer.on('auto:progress', handler);
     return () => ipcRenderer.off('auto:progress', handler);
+  }
+});
+
+contextBridge.exposeInMainWorld('onecastAI', {
+  status: () => ipcRenderer.invoke('ai:status'),
+  score: (payload) => ipcRenderer.invoke('ai:score', payload),
+  onProgress: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on('ai:progress', handler);
+    return () => ipcRenderer.off('ai:progress', handler);
   }
 });
