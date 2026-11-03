@@ -1143,6 +1143,15 @@ function renderMedia(){
     d.appendChild(x);
     grid.appendChild(d);
   });
+  // 封面单独渲染：必须在素材为空的提前返回之前，否则清空后封面缩略图不会消失
+  const cp=$('#coverPh');
+  if(cp){
+    if(state.content.cover&&state.content.cover.url){
+      cp.outerHTML=`<img id="coverPh" src="${state.content.cover.url}" alt="封面">`;
+    }else if(cp.tagName==='IMG'){
+      cp.outerHTML='<span id="coverPh">封面</span>';
+    }
+  }
   const meta=$('#mediaMeta');
   if(!media.length){ meta.style.display='none'; return; }
   meta.style.display='flex';
@@ -1151,14 +1160,6 @@ function renderMedia(){
   const kind=[nImg?nImg+' 图':'', nVid?nVid+' 视频':''].filter(Boolean).join(' + ');
   const saved=IDB.usable&&media.some(m=>m.url&&m.url.startsWith('data:'))?' · 重启后保留':'';
   meta.innerHTML=`<span>${media.length} 个 · ${fmtSize(total)} · ${kind}${saved}</span><span>指纹 <code>${esc(mediaFingerprint().slice(0,16))}</code></span>`;
-
-  const cp=$('#coverPh');
-  if(state.content.cover&&state.content.cover.url){
-    cp.outerHTML=`<img id="coverPh" src="${state.content.cover.url}" alt="封面">`;
-  }else{
-    const img=$('#coverPh');
-    if(img&&img.tagName==='IMG'){ img.outerHTML='<span id="coverPh">封面</span>'; }
-  }
 }
 
 async function fileFingerprint(file){
@@ -2540,7 +2541,12 @@ function bindEvents(){
     cbox.addEventListener('drop',e=>{ e.preventDefault(); if(e.dataTransfer.files[0]) setCover(e.dataTransfer.files[0]); });
   }
   $('#coverInput').onchange=e=>{ setCover(e.target.files[0]); e.target.value=''; };
-  $('#btnClearCover').onclick=()=>{ state.content.cover=null; renderMedia(); };
+  $('#btnClearCover').onclick=async ()=>{
+    state.content.cover=null;
+    if(IDB.usable){ try{ await IDB.del('kv','cover'); }catch(e){} }
+    renderMedia(); persistContent();
+    toast('已清除封面','','ok');
+  };
 
   $('#titleInput').oninput=e=>{
     state.content.title=e.target.value; updateCounters(); persistContent(); clearJobs(); scheduleMatrix();
@@ -2582,8 +2588,13 @@ function bindEvents(){
     }
     if(!(await askConfirm({title:'清空当前内容',text:'将清空标题、正文、标签和所有素材，此操作不可撤销。历史发布记录不受影响。',okText:'清空'}))) return;
     state.content.title=''; state.content.body=''; state.content.tags='';
+    const oldMedia=state.content.media.slice();
     state.content.media=[]; state.content.cover=null;
     $('#titleInput').value=''; $('#bodyInput').value=''; $('#tagsInput').value='';
+    if(IDB.usable){
+      try{ await IDB.del('kv','cover'); }catch(e){}
+      for(const m of oldMedia){ try{ await IDB.del('media',m.id); }catch(e){} }
+    }
     renderMedia(); updateCounters(); renderHero(); updatePublishButton();
     persistContent();
     toast('已清空','可以开始写新内容了','ok');
