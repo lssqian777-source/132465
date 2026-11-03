@@ -1,10 +1,10 @@
 {
-  "name": "onecast",
-  "productName": "OneCast",
-  "version": "1.0.20",
-  "description": "OneCast - 自媒体多平台图文分发控制台",
+  "name": "tpoe",
+  "productName": "Tpoe",
+  "version": "1.0.21",
+  "description": "Tpoe · 万相位面 (The plane of Existensse) - 自媒体多平台图文分发控制台",
   "main": "main.js",
-  "author": "OneCast",
+  "author": "Hinze尚尚谦",
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -21,8 +21,8 @@
     "playwright-core": "1.48.2"
   },
   "build": {
-    "appId": "app.onecast.desktop",
-    "productName": "OneCast",
+    "appId": "app.tpoe.desktop",
+    "productName": "Tpoe",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -54,7 +54,7 @@
       ]
     },
     "portable": {
-      "artifactName": "OneCast-${version}-portable.exe"
+      "artifactName": "Tpoe-${version}-portable.exe"
     }
   }
 }

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src http: https:; base-uri 'none'; form-action 'none'; object-src 'none'">
-<title>OneCast · 自媒体一键分发控制台</title>
+<title>Tpoe · 万相位面</title>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -474,8 +474,8 @@ video.pv-media{background:#000}
       <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
     </div>
     <div>
-      <div class="brand-name">OneCast <span style="color:var(--dim);font-weight:500">一键分发</span></div>
-      <div class="brand-sub">Local-first Publisher</div>
+      <div class="brand-name">Tpoe <span style="color:var(--dim);font-weight:500">万相位面</span></div>
+      <div class="brand-sub">by Hinze尚尚谦</div>
     </div>
   </div>
   <div class="top-right">
@@ -1207,7 +1207,7 @@ async function addFiles(files){
 
 function sampleImage(n){
   const hue=[258,190,330][n-1];
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,55%)"/><stop offset="1" stop-color="hsl(${hue+40},70%,35%)"/></linearGradient></defs><rect width="900" height="1200" fill="url(#g)"/><rect x="60" y="60" width="780" height="1080" rx="28" fill="rgba(0,0,0,.18)" stroke="rgba(255,255,255,.35)"/><text x="450" y="560" text-anchor="middle" font-family="sans-serif" font-size="64" fill="#fff" font-weight="700">示例图文 ${n}</text><text x="450" y="650" text-anchor="middle" font-family="sans-serif" font-size="28" fill="rgba(255,255,255,.8)">OneCast 示例素材</text></svg>`;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,55%)"/><stop offset="1" stop-color="hsl(${hue+40},70%,35%)"/></linearGradient></defs><rect width="900" height="1200" fill="url(#g)"/><rect x="60" y="60" width="780" height="1080" rx="28" fill="rgba(0,0,0,.18)" stroke="rgba(255,255,255,.35)"/><text x="450" y="560" text-anchor="middle" font-family="sans-serif" font-size="64" fill="#fff" font-weight="700">示例图文 ${n}</text><text x="450" y="650" text-anchor="middle" font-family="sans-serif" font-size="28" fill="rgba(255,255,255,.8)">Tpoe 示例素材</text></svg>`;
   return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
 }
 function sampleMediaSet(){
@@ -2086,7 +2086,7 @@ function openAutoResult(results,submit){
         <span class="vchip ${r.ok?'ok':'err'}">${map[r.stage]||r.stage}</span>
       </div>`).join('')}
     </div>
-    <div class="warn-box">若某平台停在「需先登录」：到设置 → 打开自动发布工作台，在窗口里登录该平台后再重试。失败截图保存在 %APPDATA%\\OneCast\\automation-logs\\。</div>`;
+    <div class="warn-box">若某平台停在「需先登录」：到设置 → 打开自动发布工作台，在窗口里登录该平台后再重试。失败截图保存在 %APPDATA%\\Tpoe\\automation-logs\\。</div>`;
   openModal('自动发布结果',submit?'自动提交 · 请核对结果':'仅自动填表 · 发布仍由你确认',body,'<button class="btn primary" data-close-auto>知道了</button>');
   $('[data-close-auto]').onclick=closeModal;
 }
