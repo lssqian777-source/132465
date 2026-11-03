@@ -199,7 +199,7 @@ function writeTempMedia(files) {
     const base = String(f.name || '').replace(/[^\w.\-\u4e00-\u9fa5]+/g, '_').slice(0, 80);
     const p = path.join(dir, (base || 'media-' + i) + (/\.[a-z0-9]{2,4}$/i.test(base) ? '' : '.' + sub));
     fs.writeFileSync(p, buf);
-    out.push({ path: p, name: f.name || path.basename(p), size: buf.length });
+    out.push({ path: p, name: f.name || path.basename(p), size: buf.length, dataUrl: f.dataUrl });
   });
   return out;
 }
@@ -226,6 +226,18 @@ function registerAutoHandlers() {
   ipcMain.handle('auto:cancel', () => {
     if (autoRunner) autoRunner.cancelled = true;
     return { ok: true };
+  });
+
+  // 在自动发布工作台（受控浏览器）里打开指定 URL，避免再弹一个系统浏览器
+  ipcMain.handle('auto:open-url', async (event, payload) => {
+    try {
+      const url = String(payload && payload.url || '');
+      if (!/^https?:\/\//.test(url)) return { ok: false, error: '无效链接' };
+      await getRunner().openUrl(url, payload && payload.browser);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: String(e.message || e) };
+    }
   });
 
   ipcMain.handle('auto:run', async (event, payload) => {

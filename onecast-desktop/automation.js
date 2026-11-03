@@ -76,15 +76,14 @@ const ADAPTERS = {
   },
   instagram: {
     name: 'Instagram',
-    url: 'https://www.instagram.com/',
+    url: 'https://www.instagram.com/create/select/',
     host: 'instagram.com',
-    manual: true,
     imageTab: [],
     videoTab: [],
     titleSelectors: [],
-    bodySelectors: [],
-    submit: ['Share', '分享'],
-    note: '网页版发文不稳定，请手动发布'
+    bodySelectors: ['div[aria-label*="caption" i]', 'textarea', 'div[contenteditable="true"]'],
+    submit: ['Share', '分享', '发布'],
+    note: '上传图片后在「分享」前可编辑说明文字；图片最多 10 张'
   },
   wechat: {
     name: '微信（视频号/贴图）',
@@ -485,6 +484,14 @@ class AutoRunner {
     return '工作台已打开：请在这里分别登录要自动化的平台，登录态会长期保留';
   }
 
+  /** 在工作台浏览器里新开一个标签页打开指定 URL（回退时用，不再弹系统浏览器） */
+  async openUrl(url, browserPref) {
+    const ctx = await this.ensureContext(browserPref);
+    const page = await ctx.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 35000 }).catch(() => {});
+    await page.bringToFront().catch(() => {});
+  }
+
   async shot(page, tag) {
     try {
       fs.mkdirSync(this.logDir, { recursive: true });
@@ -520,28 +527,60 @@ class AutoRunner {
     const tabs = imagesOnly ? (adapter.imageTab || []) : (adapter.videoTab || []);
     if (tabs.length && await clickByText(page, tabs)) await sleep(1500);
 
-    // 2. 上传素材：塞给正确的 file input（不要盲取第一个）
+    // 2. 上传素材：优先 file input，失败则用拖拽兜底（小红书/微博等）
     if (files.length) {
       let input = await pickFileInput(page, imagesOnly ? 'image' : 'video');
       if (!input) {
         await sleep(1500);
         input = await pickFileInput(page, imagesOnly ? 'image' : 'video');
       }
+      const before = await countThumbs(page);
+      let uploaded = false;
       if (input) {
-        const before = await countThumbs(page);
         try {
           await input.setInputFiles(files.slice(0, 18), { timeout: 20000 });
-          await waitUntil(async () => (await countThumbs(page)) > before, 20000);
-          fields.images = Math.min(files.length, 18);
-        } catch (e) {
-          /* 上传失败保持 0，后续如实报告 */
-        }
+          await waitUntil(async () => (await countThumbs(page)) > before, 15000);
+          uploaded = true;
+        } catch (e) { /* 走兜底 */ }
       }
+      if (!uploaded) {
+        // 拖拽兜底：把 data URL 转成 File 模拟拖放
+        try {
+          const dataUrls = files.slice(0, 18).map(f => f.dataUrl).filter(Boolean);
+          if (dataUrls.length) {
+            await page.evaluate(async (urls) => {
+              const input = document.querySelector('div[contenteditable="true"], textarea')
+                || document.activeElement;
+              if (!input) return;
+              const files = [];
+              for (const u of urls) {
+                const res = await fetch(u);
+                const blob = await res.blob();
+                files.push(new File([blob], 'media.' + (blob.type.split('/')[1] || 'png'), { type: blob.type }));
+              }
+              const dt = new DataTransfer();
+              files.forEach(f => dt.items.add(f));
+              input.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+            }, dataUrls);
+            await waitUntil(async () => (await countThumbs(page)) > before, 15000);
+            uploaded = true;
+          }
+        } catch (e) { /* 如实报告失败 */ }
+      }
+      if (uploaded) fields.images = Math.min(files.length, 18);
     }
 
     // 3. 等编辑区渲染出来（很多平台上传完素材才显示标题/正文）
+    //    抖音/小红书/Instagram 上传后要点「下一步」才出现文案框，自动点一下
+    for (let step = 0; step < 3; step++) {
+      const hasField = (await findField(page, adapter.titleSelectors)) || (await findField(page, adapter.bodySelectors));
+      if (hasField) break;
+      const nextClicked = await clickByText(page, ['下一步', 'Next', '继续', 'Next step', '前进']);
+      if (!nextClicked) break;
+      await sleep(1200);
+    }
     await waitUntil(async () =>
-      (await findField(page, adapter.titleSelectors)) || (await findField(page, adapter.bodySelectors)), 15000);
+      (await findField(page, adapter.titleSelectors)) || (await findField(page, adapter.bodySelectors)), 8000);
 
     const content = job.content || {};
     const title = (content.title || '').trim();
@@ -569,6 +608,58 @@ class AutoRunner {
 
     await sleep(500);
     return fields;
+  }
+
+  /**
+   * 抖音：按音乐名搜索并选用第一个结果。找不到就跳过（不报错）。
+   * 抖音创作页有「搜索音乐」输入框，输入后结果列表每项有「使用」按钮。
+   */
+  async selectMusic(page, name) {
+    try {
+      // 1. 找到音乐搜索输入框
+      const search = await page.evaluateHandle(() => {
+        const inputs = [...document.querySelectorAll('input, [contenteditable="true"]')];
+        for (const el of inputs) {
+          const ph = (el.getAttribute('placeholder') || el.getAttribute('data-placeholder') || '').toLowerCase();
+          if (/音乐|配乐|搜索/.test(ph) && /音乐|配乐/.test(ph)) return el;
+        }
+        // 退而求其次：找带「添加音乐」「选择音乐」的按钮并点击
+        const btns = [...document.querySelectorAll('button, [role="button"], div, span')];
+        for (const b of btns) {
+          const t = (b.innerText || '').trim();
+          if (/添加音乐|选择音乐|搜索音乐|换一首/.test(t)) { b.click(); return null; }
+        }
+        return null;
+      }).catch(() => null);
+      if (search) {
+        await search.focus().catch(() => {});
+        await page.keyboard.insertText(name);
+        await page.keyboard.press('Enter');
+      } else {
+        // 没找到搜索框但点了按钮，再找一次
+        await sleep(1200);
+        const inp = await page.locator('input[placeholder*="音乐"], input[placeholder*="搜索"]').first();
+        if (await inp.count()) {
+          await inp.fill(name);
+          await inp.press('Enter');
+        } else {
+          return false;
+        }
+      }
+      await sleep(2000);
+      // 2. 点第一个结果的「使用」按钮
+      const used = await page.evaluate(() => {
+        const btns = [...document.querySelectorAll('button, [role="button"], div, span')];
+        for (const b of btns) {
+          const t = (b.innerText || '').trim();
+          if (/使用|选用|选择这首|使用该音乐/.test(t)) { b.click(); return true; }
+        }
+        return false;
+      }).catch(() => false);
+      return used;
+    } catch (e) {
+      return false;
+    }
   }
 
   async runOne(pid, job, opts, emit) {
@@ -599,6 +690,13 @@ class AutoRunner {
       await sleep(1200);
       emit({ pid, stage: 'upload', message: '上传素材并填写文案' });
       const r = await this.fillOne(page, adapter, job);
+
+      // 视频平台自动配乐（目前支持抖音）：按用户填的音乐名搜索并选用第一个
+      if (pid === 'douyin' && job.content && job.content.music) {
+        emit({ pid, stage: 'music', message: `搜索配乐「${job.content.music}」` });
+        const musicOk = await this.selectMusic(page, String(job.content.music));
+        if (musicOk) r.music = true;
+      }
 
       // 6. 仅当用户显式开启「自动提交」才点发布
       let submitted = false;

@@ -588,6 +588,10 @@ video.pv-media{background:#000}
           </select>
         </div>
       </div>
+      <div class="field">
+        <label>配乐名称（视频平台自动匹配） <span class="muted" style="font-weight:400">填音乐名，抖音会自动搜索并选用；找不到就用平台默认</span></label>
+        <input class="inp" id="musicInput" placeholder="例如：起风了、晴天、Despacito">
+      </div>
       <div class="inline-hint">标签用空格或逗号分隔。零成本模式不调用 X API，不产生费用；仅在关闭零成本模式并真实调用 API 时，含链接帖按 $0.20/条计费。</div>
     </section>
 
@@ -766,7 +770,7 @@ const DEFAULT_SETTINGS = {mode:'demo',apiBase:'',dryRun:true,autoLock:10,freeMod
 
 const state = {
   accounts:[], settings:{...DEFAULT_SETTINGS}, audit:[], hashes:[], history:[],
-  content:{title:'',body:'',tags:'',visibility:'public',media:[],cover:null,demoMedia:false},
+  content:{title:'',body:'',tags:'',music:'',visibility:'public',media:[],cover:null,demoMedia:false},
   overrides:{}, selected:new Set(PLATFORMS.map(p=>p.id)), expanded:new Set(),
   jobs:{}, vault:null, vaultKey:null, secrets:null, running:false, lastActive:Date.now()
 };
@@ -819,6 +823,7 @@ function loadLocal(){
       state.content.title = c.title||'';
       state.content.body = c.body||'';
       state.content.tags = c.tags||'';
+      state.content.music = c.music||'';
       state.content.visibility = c.visibility||'public';
       state.overrides = c.overrides||{};
       state.content.demoMedia = !!c.demoMedia;
@@ -831,7 +836,7 @@ function persist(key,val){ try{ localStorage.setItem(key,JSON.stringify(val)); }
 function persistAccounts(){ persist(LS.accounts,state.accounts); }
 function persistSettings(){ persist(LS.settings,state.settings); }
 function persistContent(){
-  persist(LS.content,{title:state.content.title,body:state.content.body,tags:state.content.tags,
+  persist(LS.content,{title:state.content.title,body:state.content.body,tags:state.content.tags,music:state.content.music,
     visibility:state.content.visibility,overrides:state.overrides,demoMedia:!!state.content.demoMedia});
 }
 function persistAudit(){ persist(LS.audit,state.audit.slice(0,80)); }
@@ -1294,6 +1299,7 @@ function effective(pid){
     title:o.title!==undefined?o.title:state.content.title,
     body:o.body!==undefined?o.body:state.content.body,
     tags:o.tags!==undefined?o.tags:state.content.tags,
+    music:o.music!==undefined?o.music:state.content.music,
     visibility:o.visibility!==undefined?o.visibility:state.content.visibility,
     schedule:o.schedule||'',
     media:platformMedia(pid)
@@ -1761,6 +1767,7 @@ function openSettings(){
         state.content.title=data.content.title||'';
         state.content.body=data.content.body||'';
         state.content.tags=data.content.tags||'';
+        state.content.music=data.content.music||'';
         state.content.visibility=data.content.visibility||'public';
         state.overrides=data.content.overrides||{};
       }
@@ -1783,7 +1790,7 @@ function exportData(){
     exportedAt:new Date().toISOString(),
     accounts:state.accounts,
     settings:state.settings,
-    content:{title:state.content.title,body:state.content.body,tags:state.content.tags,
+    content:{title:state.content.title,body:state.content.body,tags:state.content.tags,music:state.content.music,
       visibility:state.content.visibility,overrides:state.overrides},
     audit:state.audit,
     hashes:state.hashes
@@ -1887,7 +1894,9 @@ function openCreate(pid){
   const p=getPlatform(pid);
   const free=!!state.settings.freeMode;
   if(free||p.api==='none') copyContent(pid);
-  window.open(p.createUrl,'_blank','noopener');
+  const api=window.onecastAuto;
+  if(api&&api.openUrl){ api.openUrl(p.createUrl,state.settings.browser||'auto'); }
+  else{ window.open(p.createUrl,'_blank','noopener'); }
   if(free||p.api==='none') toast('已复制文案','请在打开的创作中心粘贴素材与文案并人工确认','ok');
 }
 
@@ -1987,9 +1996,9 @@ function openFreeConfirm(pids){
       </div>`).join('')}
     </div>
     ${autoOn?'':'<div class="warn-box">发布包只包含文案、平台入口和素材清单，不会自动上传文件，也不会自动点击发布。可直接使用各平台自带的定时发布。</div>'}
-    <label class="confirm-check"><input type="checkbox" id="freeConfirm"> ${autoOn?'我了解自动发布的风险，并确认使用自己的账号操作。':'我了解：发布需要我在各平台手动确认，本操作不会产生 API 费用。'}</label>`;
+    <label class="confirm-check"><input type="checkbox" id="freeConfirm" checked> ${autoOn?'我了解自动发布的风险，并确认使用自己的账号操作。':'我了解：发布需要我在各平台手动确认，本操作不会产生 API 费用。'}</label>`;
   const foot=`<button class="btn ghost" id="freeCancel">取消</button>
-    <button class="btn primary" id="freeStart" disabled>生成发布包</button>`;
+    <button class="btn primary" id="freeStart" ${okCount===0?'disabled':''}>生成发布包</button>`;
   openModal(autoOn?'发布确认':'免费发布清单',autoOn?'自动发布（实验性）· 可切换半自动':'零 API 费用 · 逐平台人工确认',body,foot);
   $('#freeCancel').onclick=closeModal;
   $('#freeConfirm').onchange=e=>{ $('#freeStart').disabled=!e.target.checked||okCount===0; };
@@ -2087,7 +2096,8 @@ function openPackModal(pids){
   const c=state.content;
   const auto=window.onecastAuto;
   const body=`
-    <div class="gate-box"><b>${pids.length} 个平台待发布</b><br>${auto?'点「自动填表」会自动上传素材并填好文案，填完后在打开的窗口里核对并点发布。':'逐个点击“复制文案”和“打开创作中心”，在平台页面手动粘贴与上传。'}</div>
+    <div class="gate-box"><b>${pids.length} 个平台待发布</b><br>${auto?'点「全部自动填表」会一次性上传所有平台的素材并填好文案，填完后在打开的窗口里核对并点发布。也可以逐个点「自动填表」。':'逐个点击“复制文案”和“打开创作中心”，在平台页面手动粘贴与上传。'}</div>
+    ${auto?`<div style="margin:6px 0 14px"><button class="btn accent" id="fillAllBtn" style="width:100%;padding:12px;font-size:15px">全部自动填表（${pids.length} 个平台）</button></div>`:''}
     <div class="pack-list">
       ${pids.map(pid=>{
         const p=getPlatform(pid), acc=getAccount(pid), e=effective(pid);
@@ -2108,6 +2118,8 @@ function openPackModal(pids){
     <div class="pack-media"><b style="color:var(--txt)">素材清单</b><br>${c.media.map(m=>esc(m.name)+' · '+fmtSize(m.size)).join('<br>')||'未添加素材'}${c.cover?'<br>封面：'+esc(c.cover.name):''}</div>`;
   openModal('零成本发布包',auto?'自动填表 → 核对 → 点发布':'复制文案 → 打开创作中心 → 手动发布',body,'<button class="btn ghost" data-close-pack>完成</button>');
   $('[data-close-pack]').onclick=closeModal;
+  const fillAll=$('#fillAllBtn');
+  if(fillAll) fillAll.onclick=()=>{ closeModal(); runAutoPublish(pids,false); };
   $$('[data-copy]').forEach(b=>b.onclick=()=>copyContent(b.dataset.copy));
   $$('[data-open-pack]').forEach(b=>b.onclick=()=>{
     const pid=b.dataset.openPack;
@@ -2115,7 +2127,9 @@ function openPackModal(pids){
       runAutoFillOne(pid,b);
     }else{
       copyContent(pid);
-      window.open(getPlatform(pid).createUrl,'_blank','noopener');
+      const api=window.onecastAuto;
+      if(api&&api.openUrl){ api.openUrl(getPlatform(pid).createUrl,state.settings.browser||'auto'); }
+      else{ window.open(getPlatform(pid).createUrl,'_blank','noopener'); }
       b.textContent='已打开';
     }
   });
@@ -2156,7 +2170,9 @@ async function runAutoFillOne(pid,btn){
     // 失败/未填时，回退到打开创作中心让用户手动操作
     if(btn.textContent!=='已填好 ✓'){
       copyContent(pid);
-      window.open(getPlatform(pid).createUrl,'_blank','noopener');
+      const api=window.onecastAuto;
+      if(api&&api.openUrl){ api.openUrl(getPlatform(pid).createUrl,state.settings.browser||'auto'); }
+      else{ window.open(getPlatform(pid).createUrl,'_blank','noopener'); }
     }
   }
 }
@@ -2384,7 +2400,7 @@ async function recordPublish(entry){
   }
   const rec={
     id:uid(), ts:Date.now(),
-    title:String(c.title||''), body:String(c.body||''), tags:String(c.tags||''),
+    title:String(c.title||''), body:String(c.body||''), tags:String(c.tags||''), music:String(c.music||''),
     platforms:entry.platforms||[], mode:entry.mode||'pack', status:entry.status||'',
     mediaIds:(c.media||[]).map(m=>m.id), mediaCount:(c.media||[]).length,
     cover:c.cover?c.cover.name:'',
@@ -2436,10 +2452,11 @@ function openHistoryDetail(id){
 }
 
 function reuseRecord(r){
-  state.content.title=r.title||''; state.content.body=r.body||''; state.content.tags=r.tags||'';
+  state.content.title=r.title||''; state.content.body=r.body||''; state.content.tags=r.tags||''; state.content.music=r.music||'';
   $('#titleInput').value=state.content.title;
   $('#bodyInput').value=state.content.body;
   $('#tagsInput').value=state.content.tags;
+  $('#musicInput').value=state.content.music;
   // 恢复素材：优先用历史记录里的缩略图（小图），如果本地素材库还有原图则用原图
   const restored=[];
   if(r.mediaThumbs&&r.mediaThumbs.length){
@@ -2607,6 +2624,9 @@ function bindEvents(){
   $('#tagsInput').oninput=e=>{
     state.content.tags=e.target.value; updateCounters(); persistContent(); clearJobs(); scheduleMatrix();
   };
+  $('#musicInput').oninput=e=>{
+    state.content.music=e.target.value; persistContent(); clearJobs();
+  };
   $('#visSelect').onchange=e=>{
     state.content.visibility=e.target.value; persistContent(); clearJobs(); renderMatrix();
   };
@@ -2636,11 +2656,11 @@ function bindEvents(){
     if(!state.content.title&&!state.content.body&&!state.content.tags&&!state.content.media.length){
       toast('已经是空的','','ok'); return;
     }
-    if(!(await askConfirm({title:'清空当前内容',text:'将清空标题、正文、标签和所有素材，此操作不可撤销。历史发布记录不受影响。',okText:'清空'}))) return;
-    state.content.title=''; state.content.body=''; state.content.tags='';
+    if(!(await askConfirm({title:'清空当前内容',text:'将清空标题、正文、标签、配乐和所有素材，此操作不可撤销。历史发布记录不受影响。',okText:'清空'}))) return;
+    state.content.title=''; state.content.body=''; state.content.tags=''; state.content.music='';
     const oldMedia=state.content.media.slice();
     state.content.media=[]; state.content.cover=null;
-    $('#titleInput').value=''; $('#bodyInput').value=''; $('#tagsInput').value='';
+    $('#titleInput').value=''; $('#bodyInput').value=''; $('#tagsInput').value=''; $('#musicInput').value='';
     if(IDB.usable){
       try{ await IDB.del('kv','cover'); }catch(e){}
       for(const m of oldMedia){ try{ await IDB.del('media',m.id); }catch(e){} }
@@ -2698,6 +2718,7 @@ async function init(){
   $('#titleInput').value=state.content.title||'';
   $('#bodyInput').value=state.content.body||'';
   $('#tagsInput').value=state.content.tags||'';
+  $('#musicInput').value=state.content.music||'';
   $('#visSelect').value=state.content.visibility||'public';
   $('#checkAll').checked=isSelectedAll();
   updateCounters();
