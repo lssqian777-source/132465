@@ -8,7 +8,7 @@ const os = require('node:os');
 // 公钥用于校验从 GitHub 拉取的 onecast.html，私钥仅在构建机上用于签名。
 // 若签名不匹配，本次更新会被丢弃，继续使用本地缓存或打包内置版本。
 const UPDATE_PUB_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAbhdX49O7HNHfWzcyqq9zQk61U0UYYDDpMOhNOEjDSF8=
+MCowBQYDK2VwAyEA6m7GStNt6muuKsNhWxGgEpJEXlYQiSqiKMMaM3mL4Xg=
 -----END PUBLIC KEY-----`;
 
 const HTML_SOURCES = [
@@ -126,7 +126,7 @@ function createWindow() {
     minHeight: 680,
     show: false,
     backgroundColor: '#0b0f17',
-    title: 'OneCast',
+    title: 'Tpoe · 万相位面',
     autoHideMenuBar: true,
     icon: path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {

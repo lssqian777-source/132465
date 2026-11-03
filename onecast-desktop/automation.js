@@ -1,8 +1,8 @@
 /**
- * OneCast 自动发布引擎（实验性）
+ * Tpoe (万相位面) 自动发布引擎（实验性）
  *
  * 原理：用 playwright-core 驱动本机已安装的 Chrome / Edge，在一个独立的浏览器
- * 配置文件（%APPDATA%/OneCast/browser-profile）里打开各平台创作中心，复用你
+ * 配置文件（%APPDATA%/Tpoe/browser-profile）里打开各平台创作中心，复用你
  * 在该配置文件中的登录态。
  *
  * 重要说明：
@@ -10,7 +10,7 @@
  * - 默认只「自动填表」（上传素材 + 填标题正文），最后一步由你人工点击发布。
  * - 填完的标签页会保持打开，你可以直接在那个窗口里核对并点发布。
  * - 平台页面随时可能改版，本引擎按文本/结构做启发式匹配；每填一项都会回读校验，
- *   没填进去会如实返回，失败时保留截图在 %APPDATA%/OneCast/automation-logs/。
+ *   没填进去会如实返回，失败时保留截图在 %APPDATA%/Tpoe/automation-logs/。
  */
 const { chromium } = require('playwright-core');
 const fs = require('node:fs');
