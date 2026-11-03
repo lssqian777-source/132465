@@ -99,6 +99,9 @@ const ADAPTERS = {
 };
 
 /** AI 评分适配器：用网页版聊天（免费，不调 API） */
+const AI_MARK_A = '<<<SCORE_START>>>';
+const AI_MARK_B = '<<<SCORE_END>>>';
+
 const AI_ADAPTERS = {
   doubao: {
     name: '豆包',
@@ -108,27 +111,19 @@ const AI_ADAPTERS = {
     inputSelectors: ['div[contenteditable="true"]', 'textarea'],
     // 发送按钮：按文本或 aria-label 找
     sendLabels: ['发送', 'Send', '发送消息'],
-    // 回复：取最后一条 AI 消息的文本
+    // 回复：豆包一条消息是一个 [class*="inner-item"]，最后一条是 AI 回复
     replyEval: () => {
-      // 豆包的消息流：找所有消息块，取最后一个非用户的
-      const all = document.querySelectorAll('[data-message-author-role], [class*="message"], [class*="msg"]');
-      let last = '';
-      for (const el of all) {
-        const role = el.getAttribute('data-message-author-role') || '';
-        const txt = (el.innerText || el.textContent || '').trim();
-        if (txt && txt.length > 5 && role !== 'user') last = txt;
+      const items = document.querySelectorAll('[class*="inner-item"]');
+      if (items.length) {
+        const t = (items[items.length - 1].innerText || '').trim();
+        if (t) return t;
       }
-      // 兜底：取页面里最长的文本块
-      if (!last) {
-        const blocks = document.querySelectorAll('div, p, article');
-        let best = '';
-        for (const b of blocks) {
-          const t = (b.innerText || '').trim();
-          if (t.length > best.length && t.length < 4000) best = t;
-        }
-        last = best;
+      const rows = document.querySelectorAll('.scroller_content .list_items > .v_list_row, .message-list-zLoNs1 .v_list_row');
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const t = (rows[i].innerText || '').trim();
+        if (t.length > 10) return t;
       }
-      return last;
+      return '';
     }
   },
   deepseek: {
@@ -308,6 +303,15 @@ async function writeField(page, el, text) {
   }).catch(() => {});
   await page.keyboard.insertText(text);
   return true;
+}
+
+/** 从抓到的整段文本里取出 AI 标记之间的内容 */
+function extractMarked(text) {
+  if (!text) return '';
+  const a = text.indexOf(AI_MARK_A);
+  const b = text.lastIndexOf(AI_MARK_B);
+  if (a >= 0 && b > a) return text.slice(a + AI_MARK_A.length, b).trim();
+  return '';
 }
 
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, '');
@@ -612,15 +616,17 @@ class AutoRunner {
       await page.goto(adapter.url, { waitUntil: 'domcontentloaded', timeout: 40000 });
       await sleep(1500);
 
-      // 登录态检测
+      // 登录态检测（DeepSeek 跳转的是 /sign_in，不是 /signin）
       const url = page.url();
-      if (/login|passport|signin|accounts\./i.test(url)) {
+      if (/login|passport|sign[_-]?in|sign[_-]?up|accounts\./i.test(url)) {
         await page.bringToFront().catch(() => {});
         return { ok: false, stage: 'login',
           message: `需要先在自动发布工作台登录${adapter.name}（窗口已打开，登录后重新评分即可）` };
       }
 
       emit({ stage: 'input', message: '写入评分内容' });
+      // 要求 AI 把结果包在标记里，方便精确截取（页面上的推荐问题/广告不会被混进来）
+      const fullPrompt = prompt + `\n\n【输出格式要求】请把你要输出的全部内容放在 ${AI_MARK_A} 与 ${AI_MARK_B} 两行之间，两个标记各自单独占一行；标记之外不要写任何文字。`;
       // 等输入框出现（注意：waitUntil 只返回布尔值，元素要单独接住）
       let input = null;
       await waitUntil(async () => {
@@ -646,7 +652,7 @@ class AutoRunner {
       }, 15000);
       if (!input) return { ok: false, stage: 'error', message: '找不到输入框，页面可能改版了' };
 
-      await writeField(page, input, prompt);
+      await writeField(page, input, fullPrompt);
       await sleep(600);
 
       emit({ stage: 'send', message: '发送给 AI' });
@@ -672,11 +678,20 @@ class AutoRunner {
       // 等待回复完成：每隔 1.5s 抓取最后一条回复，连续 3 次长度不变认为完成
       let lastText = '';
       let stable = 0;
+      let captcha = false;
       const deadline = Date.now() + 120000;
       await sleep(3000); // 先等 AI 开始输出
       while (Date.now() < deadline) {
         await sleep(1500);
         const cur = await page.evaluate(adapter.replyEval).catch(() => '');
+        // 未登录时可能弹人机验证（选图/拖动），提前告知用户
+        if (!lastText) {
+          captcha = await page.evaluate(() => {
+            const t = document.body ? document.body.innerText.slice(0, 2000) : '';
+            return /拖动到下方|请选择所有符合|人机验证|完成验证|安全验证/i.test(t);
+          }).catch(() => false);
+          if (captcha) break;
+        }
         if (cur && cur.length > lastText.length) {
           lastText = cur;
           stable = 0;
@@ -687,11 +702,20 @@ class AutoRunner {
         }
       }
 
+      if (captcha) {
+        await page.bringToFront().catch(() => {});
+        return { ok: false, stage: 'captcha',
+          message: `${adapter.name} 弹出人机验证，请在打开的窗口里手动完成验证，然后重新点「开始评分」` };
+      }
       if (!lastText) return { ok: false, stage: 'error', message: '没有收到 AI 回复' };
 
+      // 优先取标记之间的内容；AI 没按要求输出时退回整段（去掉页面上的推广/推荐问题尾巴）
+      const marked = extractMarked(lastText);
+      const text = (marked || lastText).trim();
+
       await page.bringToFront().catch(() => {});
-      return { ok: true, stage: 'done', text: lastText,
-        message: `${adapter.name} 评分完成（${lastText.length} 字）` };
+      return { ok: true, stage: 'done', text,
+        message: `${adapter.name} 评分完成（${text.length} 字）` };
     } catch (e) {
       const shot = page ? await this.shot(page, 'ai-' + provider + '-error') : '';
       return { ok: false, stage: 'error', shot, message: 'AI 评分出错：' + (e.message || e).slice(0, 120) };

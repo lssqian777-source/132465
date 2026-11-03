@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('onecastAuto', {
 contextBridge.exposeInMainWorld('onecastAI', {
   status: () => ipcRenderer.invoke('ai:status'),
   score: (payload) => ipcRenderer.invoke('ai:score', payload),
+  hot: (source) => ipcRenderer.invoke('ai:hot', source),
   onProgress: (cb) => {
     const handler = (_e, data) => cb(data);
     ipcRenderer.on('ai:progress', handler);
