@@ -8,7 +8,7 @@ const os = require('node:os');
 // 公钥用于校验从 GitHub 拉取的 onecast.html，私钥仅在构建机上用于签名。
 // 若签名不匹配，本次更新会被丢弃，继续使用本地缓存或打包内置版本。
 const UPDATE_PUB_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEASfS0LedhgVxTyO/MuQkIVYbSVQTl9iUeMFcoCRH72yg=
+MCowBQYDK2VwAyEAgl/uhml4kmuKV1OHAJDJxBFIi/CpSo/Tc2D/UiFOyuw=
 -----END PUBLIC KEY-----`;
 
 const HTML_SOURCES = [
@@ -178,7 +178,7 @@ function createWindow() {
 // ---------- 自动发布（实验性）----------
 // 渲染进程只负责把「文案 + 素材」交过来；真正的浏览器操作全部在主进程里完成，
 // 渲染进程始终处于 sandbox 且没有任何 Node 权限。
-const { AutoRunner, ADAPTERS, findBrowser } = require('./automation');
+const { AutoRunner, ADAPTERS, AI_ADAPTERS, findBrowser } = require('./automation');
 let autoRunner = null;
 
 function getRunner() {
@@ -243,6 +243,29 @@ function registerAutoHandlers() {
       return { ok: true, results };
     } catch (e) {
       return { ok: false, results: [], error: String(e.message || e) };
+    }
+  });
+
+  // ---------- AI 内容评分（免费：驱动浏览器操作豆包/DeepSeek 网页版）----------
+  ipcMain.handle('ai:status', () => ({
+    providers: Object.keys(AI_ADAPTERS).map(k => ({ id: k, name: AI_ADAPTERS[k].name, url: AI_ADAPTERS[k].url }))
+  }));
+
+  ipcMain.handle('ai:score', async (event, payload) => {
+    const sender = event.sender;
+    const emit = data => {
+      if (!sender.isDestroyed()) sender.send('ai:progress', data);
+    };
+    try {
+      const r = await getRunner().scoreContent(
+        payload.provider,
+        String(payload.prompt || ''),
+        payload.browser,
+        emit
+      );
+      return r;
+    } catch (e) {
+      return { ok: false, stage: 'error', error: String(e.message || e) };
     }
   });
 }
