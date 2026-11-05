@@ -33,8 +33,8 @@ const ADAPTERS = {
   },
   xiaohongshu: {
     name: '小红书',
-    // 图文直接进 target=image 上传页，视频进 target=video；由 fillOne 按素材类型跳转
-    url: 'https://creator.xiaohongshu.com/publish/publish?source=official',
+    // 官方 URL：图文 = 无 target 参数（默认页）；视频 = target=video
+    url: 'https://creator.xiaohongshu.com/publish/publish?source=official&from=tab_switch',
     host: 'xiaohongshu.com',
     imageTab: [],
     videoTab: [],
@@ -98,13 +98,15 @@ const ADAPTERS = {
   },
   wechat: {
     name: '微信（视频号/贴图）',
-    // 先进图文管理列表页，点「发表图文」按钮打开编辑器
-    url: 'https://channels.weixin.qq.com/platform/post/finderNewLifePostList',
+    // 直接进「发表图文」创建页（用户实测可用）
+    url: 'https://channels.weixin.qq.com/platform/post/finderNewLifeCreate',
     host: 'weixin.qq.com',
     imageTab: [],
     videoTab: [],
-    // 点右上角橙色「发表图文」按钮进入编辑器
+    // 兜底：万一进了列表页，点右上角橙色「发表图文」按钮进入编辑器
+    // （已在创建页时不会点击，避免误点页面标题）
     createTrigger: ['发表图文'],
+    createTriggerSkipUrl: 'finderNewLifeCreate',
     // 编辑器字段：图文标题（22 字）+ 图文描述（1000 字）
     titleSelectors: ['input[placeholder*="标题"]', 'textarea[placeholder*="标题"]', 'input[aria-label*="标题"]', 'input[maxlength="22"]'],
     bodySelectors: ['textarea[placeholder*="描述"]', 'div[contenteditable="true"][data-placeholder*="描述"]', 'div[contenteditable="true"]', 'textarea'],
@@ -542,8 +544,9 @@ class AutoRunner {
     const imagesOnly = files.length > 0 && files.every(f => /\.(png|jpe?g|webp|gif)$/i.test(f));
     const fields = { title: false, body: false, images: 0 };
 
-    // 0. Instagram 等：先点「创建」按钮弹出上传 modal
-    if (adapter.createTrigger && adapter.createTrigger.length) {
+    // 0. Instagram 等：先点「创建」按钮弹出上传 modal（已在目标创建页时跳过）
+    const skipTrigger = adapter.createTriggerSkipUrl;
+    if (adapter.createTrigger && adapter.createTrigger.length && !(skipTrigger && page.url().includes(skipTrigger))) {
       for (const t of adapter.createTrigger) {
         if (await clickByText(page, [t])) { await sleep(2000); break; }
       }
@@ -551,11 +554,12 @@ class AutoRunner {
 
     // 1. 进入正确的发布类型页（图文 / 视频）
     if (adapter.host === 'xiaohongshu.com') {
-      // 小红书：直接用官方 URL 参数进对应上传页，不点 tab（点上传区会弹系统文件框）
-      const target = imagesOnly ? 'image' : 'video';
-      const want = `https://creator.xiaohongshu.com/publish/publish?source=official&from=tab_switch&target=${target}`;
+      // 小红书官方 URL：图文 = 无 target 参数（默认页）；视频 = target=video
+      const base = 'https://creator.xiaohongshu.com/publish/publish?source=official&from=tab_switch';
+      const want = imagesOnly ? base : base + '&target=video';
       try {
-        if (!page.url().includes(`target=${target}`)) {
+        const hasVideo = page.url().includes('target=video');
+        if ((imagesOnly && hasVideo) || (!imagesOnly && !hasVideo)) {
           await page.goto(want, { waitUntil: 'domcontentloaded', timeout: 30000 });
           await sleep(2000);
         }
